@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Quarterly QI Report</h1>
+<p class="sub">Step 2 of 3 &mdash; regulatory compliance attestations</p>
+<ul class="steps"><li class="done">1. Period</li><li class="on">2. Attestations</li><li>3. Review</li></ul>
+{% if errors %}<div class="err">{{ errors|length }} field(s) need an answer before you can continue.</div>{% endif %}
+<form method="post" action="/report/{{ draft_id }}/attestations">
+  {% for key, question in attestations %}
+    <label for="{{ key }}">{{ loop.index }}. {{ question }}</label>
+    <textarea id="{{ key }}" name="{{ key }}">{{ draft.answers.get(key, '') }}</textarea>
+    {% if errors.get(key) %}<div class="field-err">{{ errors[key] }}</div>{% endif %}
+  {% endfor %}
+  <div class="actions"><button type="submit">Continue to review</button></div>
+</form>
+{% endblock %}

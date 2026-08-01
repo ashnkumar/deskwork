@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Quarterly QI Report</h1>
+<p class="sub">Step 3 of 3 &mdash; review and submit</p>
+<ul class="steps"><li class="done">1. Period</li><li class="done">2. Attestations</li><li class="on">3. Review</li></ul>
+<table>
+  <tr><th>Reporting quarter</th><td>{{ draft.quarter }}</td></tr>
+  <tr><th>Department</th><td>{{ draft.department }}</td></tr>
+  <tr><th>Report ID</th><td>{{ draft.report_id }}</td></tr>
+  {% for key, question in attestations %}
+  <tr><th>{{ question }}</th><td>{{ draft.answers.get(key, '') }}</td></tr>
+  {% endfor %}
+</table>
+<form method="post" action="/report/{{ draft_id }}/submit">
+  <div class="actions">
+    <a href="/report/{{ draft_id }}/attestations"><button type="button" class="secondary">Back</button></a>
+    <button type="submit">Submit report</button>
+  </div>
+</form>
+{% endblock %}

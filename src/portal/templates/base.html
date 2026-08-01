@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}QI Portal{% endblock %}</title>
+<style>
+  /* Sized for a 1024x768 virtual display. Everything the agent must read has to be
+     legible in a screenshot at that resolution, so nothing here is below 14px. */
+  :root { --ink:#12212e; --muted:#5a6a78; --line:#c9d4dd; --accent:#14507d; --bad:#a3221d; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.5 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+         color:var(--ink); background:#eef2f5; }
+  header { background:var(--accent); color:#fff; padding:10px 20px; }
+  header b { font-size:17px; letter-spacing:.2px; }
+  header span { float:right; font-size:14px; opacity:.9; }
+  main { max-width:900px; margin:18px auto; background:#fff; border:1px solid var(--line);
+         padding:22px 26px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 18px; }
+  .steps { list-style:none; display:flex; gap:8px; padding:0; margin:0 0 20px; font-size:14px; }
+  .steps li { padding:5px 12px; border:1px solid var(--line); color:var(--muted); }
+  .steps li.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .steps li.done { border-color:var(--accent); color:var(--accent); }
+  label { display:block; font-weight:600; margin:16px 0 5px; font-size:15px; }
+  .hint { font-weight:400; color:var(--muted); font-size:14px; }
+  input[type=text], select, textarea { width:100%; padding:8px 10px; font-size:15px;
+    border:1px solid var(--line); background:#fff; font-family:inherit; }
+  textarea { min-height:62px; resize:vertical; }
+  .err { background:#fdecea; border:1px solid var(--bad); color:var(--bad); padding:10px 12px;
+         margin:14px 0; font-size:15px; }
+  .field-err { color:var(--bad); font-size:14px; margin-top:4px; }
+  .actions { margin-top:24px; padding-top:16px; border-top:1px solid var(--line); }
+  button { background:var(--accent); color:#fff; border:0; padding:10px 22px; font-size:16px;
+           cursor:pointer; }
+  button.secondary { background:#fff; color:var(--accent); border:1px solid var(--accent); }
+  table { border-collapse:collapse; width:100%; font-size:15px; }
+  th,td { border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top; }
+  th { background:#f5f8fa; width:230px; font-weight:600; }
+  .ok { background:#e8f4ea; border:1px solid #2c6e3f; color:#1d5730; padding:14px; }
+  .ref { font-size:26px; font-weight:700; letter-spacing:1px; margin:8px 0; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<header><b>Meridian Health &mdash; Quality Improvement Portal</b><span>Compliance Office</span></header>
+<main>{% block body %}{% endblock %}</main>
+</body>
+</html>

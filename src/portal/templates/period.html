@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Quarterly QI Report</h1>
+<p class="sub">Step 1 of 3 &mdash; reporting period and unit</p>
+<ul class="steps"><li class="on">1. Period</li><li>2. Attestations</li><li>3. Review</li></ul>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+<form method="post" action="/report/{{ draft_id }}/period">
+  <label for="quarter">Reporting quarter</label>
+  <select id="quarter" name="quarter">
+    <option value="">-- select --</option>
+    {% for q in quarters %}<option value="{{ q }}" {% if draft.quarter==q %}selected{% endif %}>{{ q }}</option>{% endfor %}
+  </select>
+  <label for="department">Department</label>
+  <select id="department" name="department">
+    <option value="">-- select --</option>
+    {% for d in departments %}<option value="{{ d }}" {% if draft.department==d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+  </select>
+  <label for="report_id">Report ID <span class="hint">&mdash; format QI-YYYY-NNN</span></label>
+  <input type="text" id="report_id" name="report_id" value="{{ draft.report_id }}">
+  <div class="actions"><button type="submit">Continue</button></div>
+</form>
+{% endblock %}
