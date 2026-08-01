@@ -66,6 +66,11 @@ def connect(database_url: str) -> psycopg.Connection:
     conn = psycopg.connect(database_url, autocommit=True)
     conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
     register_vector(conn)
+    # Create the tables too. Every entry point immediately queries one of them, and
+    # `deskwork run` or `deskwork verify` against a database that has never been ingested
+    # into would otherwise raise UndefinedTable instead of reaching the intended
+    # "corpus is empty" / "no submission was filed" message.
+    init_schema(conn)
     return conn
 
 

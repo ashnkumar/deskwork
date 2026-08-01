@@ -19,6 +19,12 @@ from .tools.computer import BETA_FLAG
 
 MAX_TOKENS = 16000
 
+# A turn ending with one of these was truncated or paused — it is not a completed task.
+# Treating them as success is how a run reports done after being cut off mid-sentence.
+TRUNCATING_STOP_REASONS = frozenset(
+    {"max_tokens", "model_context_window_exceeded", "pause_turn", "refusal"}
+)
+
 
 class Tool(Protocol):
     name: str
@@ -162,8 +168,19 @@ def run(
         messages.append({"role": "assistant", "content": blocks})
 
         tool_uses = [b for b in blocks if _get(b, "type") == "tool_use"]
+        reason = step.stop_reason or "end_turn"
+
+        # A truncated or paused turn is not a finished task. Executing a tool call parsed
+        # out of a response that was cut off mid-emission is worse still, so stop first.
+        if reason in TRUNCATING_STOP_REASONS:
+            steps.append(step)
+            if on_step:
+                on_step(step)
+            stopped_because = reason
+            break
+
         if not tool_uses:
-            step.stop_reason = step.stop_reason or "end_turn"
+            step.stop_reason = reason
             steps.append(step)
             if on_step:
                 on_step(step)
@@ -181,7 +198,15 @@ def run(
                 result = ToolResult.error(f"No tool named {name!r} is available.")
             else:
                 started = time.monotonic()
-                result = tool(**payload)
+                try:
+                    result = tool(**payload)
+                except Exception as exc:
+                    # Every tool_use block must get a tool_result or the conversation is
+                    # malformed and the next request is rejected. A tool that raises —
+                    # a dropped Postgres connection, an embedding failure — would
+                    # otherwise take the whole run down with it. Report and continue;
+                    # the model can retry or route around it.
+                    result = ToolResult.error(f"{type(exc).__name__}: {exc}")
                 if time.monotonic() - started > 30:
                     # Not fatal, but worth seeing in a transcript.
                     result = ToolResult(

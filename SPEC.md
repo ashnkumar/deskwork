@@ -209,7 +209,12 @@ rather than inherited.
 
 - **Not a general computer-use framework.** One agent, two tools, one task, read top to bottom.
 - **No auth in the portal.** It is a demo target on a private compose network. Adding login
-  would mean the agent spends its first four turns logging in, which teaches nothing.
+  would mean the agent spends its first four turns logging in, which teaches nothing. The
+  mitigation is deployment, not code: compose binds the portal and the noVNC desktop to
+  `127.0.0.1`. Accepted, with eyes open — an adversarial review flagged the missing auth,
+  CSRF, and draft ownership, and none of those are worth the turns they would cost the
+  demo. Concurrent-submit idempotency is in the same bucket, though `submit` now pops the
+  draft before writing so a double POST cannot file twice.
 - **Not a medical device, and not clinical advice.** It fills in a compliance form from
   public regulatory text.
 - **The portal ships with this repo.** It is a plausible multi-step application with real

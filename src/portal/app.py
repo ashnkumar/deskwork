@@ -54,11 +54,22 @@ class Draft:
     department: str = ""
     report_id: str = ""
     answers: dict[str, str] = field(default_factory=dict)
+    # Set only when every attestation validated. Inferring completeness from `answers`
+    # being non-empty is what let a rejected step through to review.
+    complete: bool = False
 
 
 # In-memory, keyed by an id in the URL. A single-user demo does not need Redis, and a
 # restart losing an in-flight draft costs nothing.
 DRAFTS: dict[str, Draft] = {}
+MAX_DRAFTS = 64
+
+
+def _remember(draft_id: str, draft: Draft) -> None:
+    """Keep the store bounded — every /report/new otherwise retains a Draft forever."""
+    while len(DRAFTS) >= MAX_DRAFTS:
+        DRAFTS.pop(next(iter(DRAFTS)))
+    DRAFTS[draft_id] = draft
 
 
 def _database_url() -> str:
@@ -82,6 +93,18 @@ def _save_submission(draft: Draft) -> int:
         conn.close()
 
 
+def _submission_exists(submission_id: int) -> bool:
+    from deskwork.db import connect, init_schema
+
+    conn = connect(_database_url())
+    try:
+        init_schema(conn)
+        row = conn.execute("SELECT 1 FROM submissions WHERE id = %s", (submission_id,)).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="QI Portal", docs_url=None, redoc_url=None)
 
@@ -96,7 +119,7 @@ def create_app() -> FastAPI:
     @app.get("/report/new")
     def new_report():
         draft_id = uuid.uuid4().hex[:8]
-        DRAFTS[draft_id] = Draft()
+        _remember(draft_id, Draft())
         return RedirectResponse(f"/report/{draft_id}/period", status_code=303)
 
     # ---------------------------------------------------------------- step 1: period & unit
@@ -191,8 +214,11 @@ def create_app() -> FastAPI:
             if len(value) < MIN_ANSWER_CHARS
         }
 
-        draft.answers = answers
+        # Only store answers once they are all valid. Storing them first left a truthy
+        # four-key dict of blanks behind, so a GET of /review or a direct POST to /submit
+        # sailed past the `not draft.answers` guard and filed an empty report.
         if errors:
+            draft.answers = answers  # keep what was typed so the form can be re-rendered
             return TEMPLATES.TemplateResponse(
                 request,
                 "attestations.html",
@@ -204,6 +230,8 @@ def create_app() -> FastAPI:
                 },
                 status_code=400,
             )
+        draft.answers = answers
+        draft.complete = True
         return RedirectResponse(f"/report/{draft_id}/review", status_code=303)
 
     # ------------------------------------------------------------------ step 3: review
@@ -211,7 +239,7 @@ def create_app() -> FastAPI:
     @app.get("/report/{draft_id}/review", response_class=HTMLResponse)
     def get_review(request: Request, draft_id: str):
         draft = DRAFTS.get(draft_id)
-        if draft is None or not draft.answers:
+        if draft is None or not draft.complete:
             return RedirectResponse("/", status_code=303)
         return TEMPLATES.TemplateResponse(
             request,
@@ -221,15 +249,22 @@ def create_app() -> FastAPI:
 
     @app.post("/report/{draft_id}/submit")
     def submit(draft_id: str):
-        draft = DRAFTS.get(draft_id)
-        if draft is None or not draft.answers:
+        # Pop first: two near-simultaneous POSTs would otherwise both read the same draft
+        # and file it twice. Whichever request wins the pop does the insert.
+        draft = DRAFTS.pop(draft_id, None)
+        if draft is None or not draft.complete:
             return RedirectResponse("/", status_code=303)
         submission_id = _save_submission(draft)
-        DRAFTS.pop(draft_id, None)
         return RedirectResponse(f"/report/done/{submission_id}", status_code=303)
 
     @app.get("/report/done/{submission_id}", response_class=HTMLResponse)
     def done(request: Request, submission_id: int):
+        # Look the row up rather than trusting the URL. Rendering a confirmation for
+        # /report/done/12345 would hand the agent a fabricated success page to believe.
+        if not _submission_exists(submission_id):
+            return TEMPLATES.TemplateResponse(
+                request, "not_found.html", {"submission_id": submission_id}, status_code=404
+            )
         return TEMPLATES.TemplateResponse(
             request,
             "done.html",

@@ -15,18 +15,31 @@ import pytest
 from deskwork import ingest, retrieval
 from tests.conftest import CORPUS_DIR, EMBED_MODEL
 
-# (question, string that must appear in a retrieved passage)
+# (question, string that must appear, filename it must have come from)
 # Ground truth read out of the source PDFs by hand.
+#
+# The filename is part of the oracle deliberately. A bare substring check passes when
+# "460" turns up in an unrelated number, or when the generic word "electronic" appears
+# anywhere at all — so it can go green without the answer-bearing passage ever being
+# retrieved. Requiring the right document makes the assertion mean what its name claims.
+RULE = "cms-0055-f-ncpdp-d0-final-rule-2020.pdf"
+BULLETIN = "cms-hipaa-d0-information-bulletin-2020.pdf"
+
 CORPUS_EVAL = [
     (
         "Which NCPDP Telecommunication Standard field must be used to identify partial "
         "fills for Schedule II drugs?",
         "460",
+        {RULE, BULLETIN},
     ),
-    ("What is the effective date of this final rule?", "March 24, 2020"),
-    ("By what date is compliance with these regulations required?", "September 21, 2020"),
-    ("What does HIPAA require the Secretary of HHS to adopt standards for?", "electronic"),
-    ("Which CFR section defines Schedule II drugs?", "1308.12"),
+    ("What is the effective date of this final rule?", "March 24, 2020", {RULE}),
+    ("By what date is compliance with these regulations required?", "September 21, 2020", {RULE}),
+    (
+        "What does HIPAA require the Secretary of HHS to adopt standards for?",
+        "electronic",
+        {RULE, BULLETIN},
+    ),
+    ("Which CFR section defines Schedule II drugs?", "1308.12", {RULE}),
 ]
 
 TOP_K = 4
@@ -104,13 +117,20 @@ def test_search_returns_k_scored_passages(ingested):
 
 
 @pytest.mark.db
-@pytest.mark.parametrize(("question", "expected"), CORPUS_EVAL, ids=lambda v: str(v)[:40])
-def test_corpus_eval(ingested, question: str, expected: str):
-    """Every fact the demo depends on must be retrievable at the configured top-k."""
+@pytest.mark.parametrize(
+    ("question", "expected", "sources"), CORPUS_EVAL, ids=lambda v: str(v)[:40]
+)
+def test_corpus_eval(ingested, question: str, expected: str, sources: set[str]):
+    """Every fact the demo depends on must be retrievable at the configured top-k.
+
+    The passage carrying the answer must also come from a document that genuinely
+    contains it — otherwise a coincidental substring match anywhere in the corpus is
+    enough to call retrieval working.
+    """
     passages = retrieval.search(ingested, question, EMBED_MODEL, k=TOP_K)
-    haystack = " ".join(p.text.lower() for p in passages)
-    assert expected.lower() in haystack, (
-        f"{expected!r} not found in top-{TOP_K} for {question!r}. "
+    hits = [p for p in passages if expected.lower() in p.text.lower() and p.filename in sources]
+    assert hits, (
+        f"{expected!r} not found in top-{TOP_K} of {sorted(sources)} for {question!r}. "
         f"Got: {[p.cite() for p in passages]}"
     )
 
@@ -127,9 +147,9 @@ def test_chunk_size_is_tuned(conn):
     def score(size: int, overlap: int) -> int:
         ingest.ingest_directory(conn, CORPUS_DIR, EMBED_MODEL, size=size, overlap=overlap)
         found = 0
-        for question, expected in CORPUS_EVAL:
+        for question, expected, sources in CORPUS_EVAL:
             passages = retrieval.search(conn, question, EMBED_MODEL, k=TOP_K)
-            if expected.lower() in " ".join(p.text.lower() for p in passages):
+            if any(expected.lower() in p.text.lower() and p.filename in sources for p in passages):
                 found += 1
         return found
 

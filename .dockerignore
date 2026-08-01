@@ -1,0 +1,15 @@
+# .env holds the API key. Without this it is part of the build context sent to the
+# daemon on every build, even though no COPY references it.
+.env
+*.env
+!.env.example
+
+.git
+.venv
+venv
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.claude/
+runs/

@@ -15,14 +15,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       firefox-esr \
       novnc websockify \
       fonts-dejavu-core ca-certificates \
+      libgomp1 \
     && rm -rf /var/lib/apt/lists/*
+# libgomp1 is ONNX Runtime's OpenMP dependency. fastembed loads onnxruntime, and on a
+# -slim base the wheel imports fine but fails at load with "libgomp.so.1: cannot open
+# shared object file" — which kills the image build at the embedding warm-up below.
 
 WORKDIR /app
 
-# Dependencies first so a source edit does not re-resolve the world.
-COPY pyproject.toml README.md ./
+# Install from the lockfile so an image built in six months matches the one that was
+# tested. `pip install .` re-resolves unbounded dependency ranges on every build, which
+# is how a repo that worked at publication quietly stops working later.
+COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir uv && uv sync --frozen --no-dev
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Bake the embedding weights into the image. Downloading ~130MB on first run would
 # otherwise happen in the middle of the demo, looking like a hang.

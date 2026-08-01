@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import base64
 import io
+import math
 import os
 import shlex
 import subprocess
@@ -39,6 +40,15 @@ CLICK_BUTTONS = {
     "right_click": 3,
 }
 SCROLL_BUTTONS = {"up": 4, "down": 5, "left": 6, "right": 7}
+
+# The API sends `text` on a click or scroll as modifier keys to hold. It becomes separate
+# argv entries, and xdotool has its own chainable command language — so
+# `text="ctrl+exec+/bin/sh+-c+id"` renders as `xdotool keydown ctrl exec /bin/sh -c id`
+# and xdotool runs the shell. shlex.quote() does not help: it protects each token from
+# /bin/sh, not from xdotool. An allowlist is the only thing that actually closes this.
+ALLOWED_MODIFIERS = frozenset(
+    {"shift", "ctrl", "control", "alt", "super", "meta", "cmd", "command"}
+)
 
 
 class ComputerToolError(Exception):
@@ -117,6 +127,13 @@ class ComputerTool:
             return ToolResult.error(str(exc))
         except subprocess.TimeoutExpired:
             return ToolResult.error(f"Action {action!r} timed out.")
+        except Exception as exc:
+            # The agent loop has already sent a tool_use block by the time this runs. An
+            # escaping exception means no tool_result is ever produced for it, which both
+            # crashes the run and leaves the conversation malformed. Everything becomes a
+            # reported error instead: a corrupt screenshot, an OverflowError on an absurd
+            # coordinate, a missing binary.
+            return ToolResult.error(f"{type(exc).__name__} during {action!r}: {exc}")
 
     def _dispatch(self, action: str, payload: dict) -> ToolResult:
         text = payload.get("text")
@@ -195,6 +212,22 @@ class ComputerTool:
 
     # -------------------------------------------------------------------------- actions
 
+    def _modifiers(self, text) -> str:
+        """Validate and render modifier keys for a click or scroll.
+
+        Anything outside ALLOWED_MODIFIERS is refused rather than passed to xdotool.
+        """
+        if not isinstance(text, str) or not text:
+            return ""
+        keys = [k.strip().lower() for k in text.split("+") if k.strip()]
+        bad = [k for k in keys if k not in ALLOWED_MODIFIERS]
+        if bad:
+            raise ComputerToolError(
+                f"Modifier keys {bad} are not allowed. `text` on a click or scroll holds "
+                f"modifiers only; permitted values are {sorted(ALLOWED_MODIFIERS)}."
+            )
+        return " ".join(keys)
+
     def _click(self, button: int, coordinate, text, repeat: int, label: str) -> ToolResult:
         # A click action always carries a coordinate. Treating a missing one as "click
         # wherever the pointer happens to be" turns a malformed call into a silent misclick
@@ -202,8 +235,8 @@ class ComputerTool:
         x, y = self._point(coordinate)
         prefix = f"mousemove {x} {y} "
         # `text` on a click action is a modifier to hold, not something to type.
-        if isinstance(text, str) and text:
-            modifiers = " ".join(shlex.quote(k) for k in text.split("+"))
+        modifiers = self._modifiers(text)
+        if modifiers:
             clicks = " ".join([f"click {button}"] * repeat)
             self._sh(f"xdotool {prefix}keydown {modifiers} {clicks} keyup {modifiers}")
         else:
@@ -228,8 +261,8 @@ class ComputerTool:
             x, y = self._point(coordinate)
             prefix = f"mousemove {x} {y} "
         button = SCROLL_BUTTONS[direction]
-        if isinstance(text, str) and text:
-            modifiers = " ".join(shlex.quote(k) for k in text.split("+"))
+        modifiers = self._modifiers(text)
+        if modifiers:
             self._sh(
                 f"xdotool {prefix}keydown {modifiers} click --repeat {amount} {button} "
                 f"keyup {modifiers}"
@@ -310,10 +343,13 @@ class ComputerTool:
     def _point(self, coordinate) -> tuple[int, int]:
         if not isinstance(coordinate, (list, tuple)) or len(coordinate) != 2:
             raise ComputerToolError(f"`coordinate` must be [x, y], got {coordinate!r}.")
+        # bool is a subclass of int, so True would otherwise silently become x=1.
+        if any(isinstance(v, bool) for v in coordinate):
+            raise ComputerToolError("`coordinate` values must be numbers, not booleans.")
         try:
             x, y = int(coordinate[0]), int(coordinate[1])
-        except (TypeError, ValueError) as exc:
-            raise ComputerToolError("`coordinate` values must be integers.") from exc
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ComputerToolError("`coordinate` values must be finite integers.") from exc
         if not (0 <= x < self.width and 0 <= y < self.height):
             raise ComputerToolError(
                 f"Coordinate ({x}, {y}) is outside the {self.width}x{self.height} display."
@@ -324,8 +360,12 @@ class ComputerTool:
     def _duration(raw) -> float:
         try:
             duration = float(raw if raw is not None else 1.0)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ComputerToolError("`duration` must be a number of seconds.") from exc
+        # NaN passes every comparison, so it would slip through a bare `< 0` check and
+        # then blow up inside time.sleep().
+        if not math.isfinite(duration):
+            raise ComputerToolError("`duration` must be a finite number of seconds.")
         if duration < 0:
             raise ComputerToolError("`duration` must not be negative.")
         # A model that asks to wait a minute has usually lost the plot; cap it.

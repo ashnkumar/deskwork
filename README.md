@@ -102,7 +102,7 @@ error here, because the alternative is silently clicking in the wrong place.
 ### Both halves are testable without spending a cent
 
 ```bash
-uv run pytest        # 89 tests, no API key, no network
+uv run pytest        # 117 tests, no API key, no network
 ```
 
 - The **computer tool** is asserted against a recording runner (exact `xdotool`
@@ -159,6 +159,17 @@ The ones you might actually change:
   general-purpose computer-use framework.
 - **Computer use is a beta API** and it misclicks. That is the current state of the art,
   and part of why the step budget and the grader exist.
+- **The portal has no authentication, ownership, or CSRF protection.** Deliberate: it is a
+  single-user demo target, and a login step would just cost the agent four turns that
+  teach nothing. Compose therefore binds it — and the noVNC desktop — to `127.0.0.1`
+  only. Do not publish either port on a shared network; `x11vnc` runs with `-nopw`, so
+  port 6080 is an unauthenticated desktop in a container that holds your API key.
+- **Drafts live in memory in one process.** Running the portal under multiple workers or
+  replicas would lose them at random. One worker, as configured, is fine.
+- **The corpus is trusted input.** Retrieved passages are handed to the model as
+  authoritative. The three documents ship with the repo and there is no upload path, but
+  if you point this at a corpus you do not control, that is a prompt-injection boundary
+  and it is not defended.
 - **Not medical or legal advice.** It fills in a compliance form from public regulatory
   text.
 

@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>No such report</h1>
+<div class="err">No submission with reference QIR-{{ "%05d"|format(submission_id) }} exists.</div>
+<div class="actions"><a href="/">Return to the portal home page</a></div>
+{% endblock %}

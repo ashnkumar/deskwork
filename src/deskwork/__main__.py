@@ -111,28 +111,43 @@ def cmd_run(config: Config, args) -> int:
             )
         )
         print(f"\ntranscript written to {args.transcript}")
+
+    # Non-zero when the run did not end because the model decided it was done. A run cut
+    # off at the step budget may have clicked Submit without ever seeing the confirmation,
+    # and scripts calling this need to be able to tell.
+    if result.stopped_because != "model_finished":
+        print(f"\nrun did not complete cleanly ({result.stopped_because})", file=sys.stderr)
+        return 3
     return 0
 
 
-def cmd_verify(config: Config) -> int:
+def cmd_verify(config: Config, args) -> int:
     """Did the run actually file a correct report?
 
     This is what turns 'does it work?' into a number. It reads the row the portal wrote,
     not the agent's own account of what it did — an agent claiming success is not evidence.
+
+    Scoped to the report ID that was asked for. Grading whichever row is newest would
+    report PASS off a leftover submission from an earlier run, which is precisely the kind
+    of false green a grader exists to prevent.
     """
     conn = db.connect(config.database_url)
     row = conn.execute(
         "SELECT id, quarter, department, report_id, answers"
-        " FROM submissions ORDER BY submitted_at DESC LIMIT 1"
+        " FROM submissions WHERE report_id = %s ORDER BY submitted_at DESC LIMIT 1",
+        (args.report_id,),
     ).fetchone()
     if row is None:
-        print("FAIL — no submission was filed.")
+        print(f"FAIL — no submission was filed for report ID {args.report_id}.")
         return 1
 
     submission_id, quarter, department, report_id, answers = row
     print(f"submission QIR-{submission_id:05d}: {quarter} / {department} / {report_id}")
 
     ok = True
+    if (quarter, department) != (args.quarter, args.department):
+        ok = False
+        print(f"  [XX] expected {args.quarter} / {args.department}")
     for key, expected in EXPECTED.items():
         actual = str(answers.get(key, ""))
         hit = expected in actual.lower()
@@ -163,7 +178,12 @@ def main(argv: list[str] | None = None) -> int:
     runner.add_argument("--display", default=":99")
     runner.add_argument("--transcript", default=None, help="write a JSON transcript here")
 
-    sub.add_parser("verify", help="check the filed submission against the corpus ground truth")
+    verifier = sub.add_parser(
+        "verify", help="check the filed submission against the corpus ground truth"
+    )
+    verifier.add_argument("--quarter", default="Q3 2025")
+    verifier.add_argument("--department", default="Pharmacy")
+    verifier.add_argument("--report-id", dest="report_id", default="QI-2025-014")
 
     args = parser.parse_args(argv)
     config = Config.from_env()
@@ -172,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_ingest(config)
     if args.command == "run":
         return cmd_run(config, args)
-    return cmd_verify(config)
+    return cmd_verify(config, args)
 
 
 if __name__ == "__main__":

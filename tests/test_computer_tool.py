@@ -302,8 +302,10 @@ def test_typing_reaches_a_real_window(xvfb, tmp_path):
     from deskwork.tools.computer import CommandRunner
 
     marker = tmp_path / "typed.txt"
+    # `xterm -e` execs a program with arguments — it does not run a shell, so a single
+    # string containing `>` would be treated as an executable name and never redirect.
     term = subprocess.Popen(
-        ["xterm", "-display", xvfb, "-geometry", "80x24+0+0", "-e", f"cat > {marker}"]
+        ["xterm", "-display", xvfb, "-geometry", "80x24+0+0", "-e", "sh", "-c", f"cat > {marker}"]
     )
     try:
         subprocess.run(["sleep", "2"], check=False)
@@ -352,3 +354,86 @@ def test_command_runner_inherits_the_environment(monkeypatch):
     assert env["DISPLAY"] == ":42", "DISPLAY must be overridden"
     assert env["XAUTHORITY"] == "/home/someone/.Xauthority", "XAUTHORITY must survive"
     assert env["PATH"] == "/opt/weird/bin", "the caller's PATH must survive"
+
+
+# ------------------------------------------------------- modifier keys are an allowlist
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"action": "left_click", "coordinate": [5, 5], "text": "ctrl+exec"},
+        {"action": "left_click", "coordinate": [5, 5], "text": "exec+/bin/sh+-c+id"},
+        {
+            "action": "scroll",
+            "coordinate": [5, 5],
+            "scroll_direction": "down",
+            "scroll_amount": 1,
+            "text": "ctrl+exec+/bin/sh",
+        },
+        {"action": "double_click", "coordinate": [5, 5], "text": "shift+key+F1"},
+    ],
+)
+def test_modifier_text_cannot_smuggle_an_xdotool_command(tool, payload):
+    """xdotool has its own chainable command language, and `exec` runs a shell.
+
+    Modifier text becomes separate argv entries, so `text="ctrl+exec+/bin/sh+-c+id"`
+    renders as `xdotool keydown ctrl exec /bin/sh -c id`. shlex.quote() protects each
+    token from /bin/sh and does nothing about xdotool itself, so the only real defence is
+    refusing anything that is not a modifier.
+    """
+    instance, runner = tool
+    result = instance(**payload)
+    assert result.is_error, "non-modifier key was accepted"
+    assert "not allowed" in (result.output or "")
+    assert not runner.xdotool, "no xdotool command should have been issued at all"
+
+
+@pytest.mark.parametrize("modifiers", ["shift", "ctrl", "alt", "super", "ctrl+shift"])
+def test_real_modifiers_still_work(tool, modifiers):
+    instance, runner = tool
+    assert not instance(action="left_click", coordinate=[5, 5], text=modifiers).is_error
+    assert "keydown" in runner.xdotool[0]
+
+
+# ------------------------------------------- nothing may escape as a raised exception
+
+
+def test_a_raising_runner_is_reported_not_raised(tmp_path):
+    """The loop has already sent a tool_use block; an exception here strands it."""
+
+    def explode(_command):
+        raise OSError("xdotool vanished")
+
+    instance = ComputerTool(runner=explode, screenshot_path=str(tmp_path / "s.png"))
+    result = instance(action="screenshot")
+    assert result.is_error
+    assert "OSError" in (result.output or "")
+
+
+def test_missing_screenshot_file_is_reported(tmp_path):
+    """scrot can exit 0 and still leave nothing behind."""
+
+    def silent_success(_command):
+        return 0, "", ""
+
+    instance = ComputerTool(runner=silent_success, screenshot_path=str(tmp_path / "nope.png"))
+    assert instance(action="screenshot").is_error
+
+
+@pytest.mark.parametrize("duration", [float("nan"), float("inf"), "nan"])
+def test_non_finite_duration_is_reported(tool, duration):
+    """NaN passes every comparison, so a bare `< 0` guard lets it reach time.sleep()."""
+    instance, _ = tool
+    assert instance(action="wait", duration=duration).is_error
+
+
+def test_boolean_coordinates_are_rejected(tool):
+    """bool subclasses int, so True would silently become x=1."""
+    instance, _ = tool
+    assert instance(action="left_click", coordinate=[True, False]).is_error
+
+
+def test_absurd_coordinate_is_reported(tool):
+    instance, _ = tool
+    assert instance(action="left_click", coordinate=[1e309, 1]).is_error

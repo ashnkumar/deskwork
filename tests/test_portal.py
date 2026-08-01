@@ -66,11 +66,16 @@ def test_period_step_rejects_bad_input_with_a_visible_error(client, payload, fra
 
 
 def test_period_step_preserves_input_after_an_error(client):
-    """A form that clears itself on error would punish the agent for one bad field."""
+    """A form that clears itself on error would punish the agent for one bad field.
+
+    Asserted on the specific input element. A bare `"nope" in response.text` also matches
+    the validation message that quotes it back, and `value="Q3 2025"` is present in the
+    static <option> list whether or not it was selected — both pass on a broken form.
+    """
     draft_id = _start(client)
     response = client.post(f"/report/{draft_id}/period", data={**GOOD, "report_id": "nope"})
-    assert "nope" in response.text
-    assert 'value="Q3 2025"' in response.text or "selected" in response.text
+    assert 'id="report_id" name="report_id" value="nope"' in response.text
+    assert '<option value="Q3 2025" selected>' in response.text
 
 
 def test_attestations_require_every_answer(client):
@@ -139,3 +144,46 @@ def test_every_attestation_has_a_stable_key():
         "compliance_date",
         "citation",
     ]
+
+
+def test_a_rejected_attestation_does_not_unlock_review(client):
+    """The bypass: storing answers before validating made a blank draft look complete."""
+    draft_id = _start(client)
+    client.post(f"/report/{draft_id}/period", data=GOOD)
+    rejected = client.post(
+        f"/report/{draft_id}/attestations", data={**ANSWERS, "compliance_date": ""}
+    )
+    assert rejected.status_code == 400
+
+    review = client.get(f"/report/{draft_id}/review", follow_redirects=False)
+    assert review.status_code == 303, "review was reachable after a rejected step"
+
+    submitted = client.post(f"/report/{draft_id}/submit", follow_redirects=False)
+    assert submitted.status_code == 303
+    assert submitted.headers["location"] == "/", "a blank report was filed"
+
+
+def test_a_rejected_attestation_still_redisplays_what_was_typed(client):
+    draft_id = _start(client)
+    client.post(f"/report/{draft_id}/period", data=GOOD)
+    response = client.post(
+        f"/report/{draft_id}/attestations", data={**ANSWERS, "compliance_date": ""}
+    )
+    assert "Quantity Prescribed (460-ET)" in response.text
+
+
+@pytest.mark.db
+def test_confirmation_page_refuses_a_reference_that_was_never_filed(client, conn):
+    """Rendering /report/done/999999 would hand the agent a fabricated success page."""
+    response = client.get("/report/done/999999")
+    assert response.status_code == 404
+    assert "No such report" in response.text
+
+
+def test_draft_store_is_bounded(client):
+    """Unbounded growth from repeated /report/new is a slow leak in a long-lived portal."""
+    from portal.app import DRAFTS, MAX_DRAFTS
+
+    for _ in range(MAX_DRAFTS + 20):
+        client.get("/report/new", follow_redirects=False)
+    assert len(DRAFTS) <= MAX_DRAFTS

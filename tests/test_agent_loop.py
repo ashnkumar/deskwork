@@ -7,6 +7,8 @@ to echo the assistant turn back, pruning the wrong blocks, looping forever.
 
 from __future__ import annotations
 
+import copy
+
 import pytest
 
 from deskwork.agent import RunResult, prune_images, run
@@ -59,7 +61,11 @@ class FakeClient:
         self.messages = self
 
     def create(self, **kwargs) -> dict:
-        self.requests.append(kwargs)
+        # Deep-copy. Production serialises each request at call time, but `messages` is a
+        # live list that later turns append to and prune in place — storing it by
+        # reference means an assertion about request N could be satisfied by something
+        # that only happened during request N+2.
+        self.requests.append(copy.deepcopy(kwargs))
         if not self._responses:
             raise AssertionError("loop asked for more turns than the script provides")
         return self._responses.pop(0)
@@ -291,3 +297,85 @@ def test_effort_is_passed_through(effort):
     client = FakeClient([text_turn("done")])
     run(client, config(effort=effort), [FakeTool("computer")], "t")
     assert client.requests[0]["output_config"]["effort"] == effort
+
+
+# -------------------------------------------------- stop reasons that are not success
+
+
+@pytest.mark.parametrize("reason", ["max_tokens", "pause_turn", "model_context_window_exceeded"])
+def test_a_truncated_turn_is_not_reported_as_finished(reason):
+    """A response cut off mid-emission has not completed the task.
+
+    Calling it `model_finished` is how a run exits zero having done half the job.
+    """
+    client = FakeClient([{"content": [{"type": "text", "text": "partial"}], "stop_reason": reason}])
+    result = run(client, config(), [FakeTool("computer")], "task")
+    assert result.stopped_because == reason
+    assert result.stopped_because != "model_finished"
+
+
+def test_a_tool_call_in_a_truncated_turn_is_not_executed():
+    """A tool_use parsed out of a truncated response should not be acted on."""
+    tool = FakeTool("computer")
+    turn = {
+        "content": [
+            {
+                "type": "tool_use",
+                "id": "t",
+                "name": "computer",
+                "input": {"action": "left_click", "coordinate": [1, 1]},
+            }
+        ],
+        "stop_reason": "max_tokens",
+    }
+    result = run(FakeClient([turn]), config(), [tool], "task")
+    assert tool.calls == [], "a truncated turn's tool call was executed"
+    assert result.stopped_because == "max_tokens"
+
+
+def test_a_raising_tool_still_produces_a_tool_result():
+    """Every tool_use needs a matching tool_result or the next request is malformed."""
+
+    class Exploding:
+        name = "computer"
+
+        def to_params(self):
+            return {"name": self.name, "description": "", "input_schema": {"type": "object"}}
+
+        def __call__(self, **payload):
+            raise RuntimeError("connection reset")
+
+    client = FakeClient([tool_turn("computer", {"action": "screenshot"}), text_turn("recovered")])
+    result = run(client, config(), [Exploding()], "task")
+
+    block = result.messages[2]["content"][0]
+    assert block["type"] == "tool_result"
+    assert block["tool_use_id"] == "toolu_1"
+    assert block["is_error"] is True
+    assert "RuntimeError" in block["content"][0]["text"]
+    assert result.stopped_because == "model_finished"
+
+
+def test_every_tool_use_has_a_matching_tool_result():
+    """The invariant that keeps the conversation well formed, asserted directly."""
+    turn = {
+        "content": [
+            {"type": "tool_use", "id": "a", "name": "computer", "input": {"action": "screenshot"}},
+            {"type": "tool_use", "id": "b", "name": "missing", "input": {}},
+        ],
+        "stop_reason": "tool_use",
+    }
+    result = run(FakeClient([turn, text_turn("done")]), config(), [FakeTool("computer")], "t")
+
+    sent, answered = set(), set()
+    for message in result.messages:
+        if not isinstance(message.get("content"), list):
+            continue
+        for block in message["content"]:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "tool_use":
+                sent.add(block["id"])
+            if block.get("type") == "tool_result":
+                answered.add(block["tool_use_id"])
+    assert sent == answered == {"a", "b"}

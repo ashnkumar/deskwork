@@ -61,6 +61,10 @@ def split_page(text: str, size: int = CHUNK_CHARS, overlap: int = CHUNK_OVERLAP)
         return []
     if overlap >= size:
         raise ValueError("overlap must be smaller than size")
+    # A negative overlap advances the window past `end` and silently drops that many
+    # characters at every boundary.
+    if overlap < 0:
+        raise ValueError("overlap must not be negative")
 
     out: list[str] = []
     start = 0
@@ -113,6 +117,10 @@ def ingest_file(
     """Ingest one PDF. Re-ingesting a file replaces it, so this is safe to re-run."""
     chunks = chunk_pdf(path, size=size, overlap=overlap)
     if not chunks:
+        # Still drop the old rows. Returning early left the previous version of a
+        # replaced file searchable — so a PDF swapped for a scan with no extractable
+        # text would keep answering questions from content that is no longer shipped.
+        conn.execute("DELETE FROM documents WHERE filename = %s", (path.name,))
         return 0
 
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
