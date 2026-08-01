@@ -1,0 +1,40 @@
+# The agent's desktop: an X display, a browser, and the agent that drives them.
+#
+# Structured after Anthropic's own computer-use reference implementation so the shape is
+# familiar to anyone who has read it. The reference this repo replaces shipped a Dockerfile
+# that installed Homebrew into a Debian image and then `brew install cliclick` — a
+# macOS-only binary. That container has never built.
+FROM python:3.12-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      xvfb x11vnc fluxbox xdotool scrot xauth x11-utils \
+      firefox-esr \
+      novnc websockify \
+      fonts-dejavu-core ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Dependencies first so a source edit does not re-resolve the world.
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN pip install --no-cache-dir .
+
+# Bake the embedding weights into the image. Downloading ~130MB on first run would
+# otherwise happen in the middle of the demo, looking like a hang.
+RUN python -c "from deskwork.embeddings import warm; warm('BAAI/bge-small-en-v1.5')"
+
+COPY corpus ./corpus
+COPY docker/agent-entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# 6080 serves noVNC so you can watch the run in a browser. That view is most of the value
+# of the demo: an agent working is much more convincing than a log of it having worked.
+EXPOSE 6080
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["sleep", "infinity"]

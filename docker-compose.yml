@@ -1,0 +1,62 @@
+name: deskwork
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: deskwork
+      POSTGRES_PASSWORD: deskwork
+      POSTGRES_DB: deskwork
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deskwork -d deskwork"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    # No host port published. Nothing outside the compose network needs it, and binding
+    # 5432 would collide with whatever Postgres the reader already runs.
+
+  portal:
+    build:
+      context: .
+      dockerfile: Dockerfile.portal
+    environment:
+      DATABASE_URL: postgresql://deskwork:deskwork@db:5432/deskwork
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')\""]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    ports:
+      # Exposed so you can look at the portal yourself and see what the agent sees.
+      - "8000:8000"
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env — see .env.example}
+      DESKWORK_MODEL: ${DESKWORK_MODEL:-claude-opus-5}
+      DESKWORK_EFFORT: ${DESKWORK_EFFORT:-high}
+      DESKWORK_MAX_STEPS: ${DESKWORK_MAX_STEPS:-40}
+      DESKWORK_MAX_IMAGES: ${DESKWORK_MAX_IMAGES:-6}
+      DESKWORK_DISPLAY_WIDTH: ${DESKWORK_DISPLAY_WIDTH:-1024}
+      DESKWORK_DISPLAY_HEIGHT: ${DESKWORK_DISPLAY_HEIGHT:-768}
+      DESKWORK_PORTAL_URL: http://portal:8000
+      DATABASE_URL: postgresql://deskwork:deskwork@db:5432/deskwork
+      DISPLAY: ":99"
+    depends_on:
+      db:
+        condition: service_healthy
+      portal:
+        condition: service_healthy
+    ports:
+      # Watch the agent work: http://localhost:6080/vnc.html
+      - "6080:6080"
+    # Firefox needs more than Docker's default 64MB of shared memory or it will crash
+    # partway through a run, which looks like an agent failure and is not.
+    shm_size: "512mb"
+    command: ["sleep", "infinity"]
