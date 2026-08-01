@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      # Same image the compose stack uses, so CI exercises the real pgvector.
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: deskwork
+          POSTGRES_PASSWORD: deskwork
+          POSTGRES_DB: deskwork
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U deskwork -d deskwork"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://deskwork:deskwork@localhost:5432/deskwork
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install X tooling for the computer-use tests
+        # These let the @display tests drive a real Xvfb and type into a real xterm.
+        # Without them those tests skip, and the computer tool goes untested end to end.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb xdotool scrot xterm x11-utils
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --all-extras --dev
+
+      - name: Lint
+        run: |
+          uv run ruff check src tests
+          uv run ruff format --check src tests
+
+      - name: Test
+        # The default addopts already deselect `live`, so no API key is needed and no
+        # credit is spent. Everything else — retrieval, portal, computer tool, agent
+        # loop — runs for real.
+        run: uv run pytest -q
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The reference implementation this repo replaces shipped a Dockerfile that had
+      # never been built. Building both images on every push is how that stays fixed.
+      - name: Build the portal image
+        run: docker build -f Dockerfile.portal -t deskwork-portal .
+      - name: Build the agent image
+        run: docker build -f Dockerfile.agent -t deskwork-agent .
+      - name: Check the compose file is valid
+        run: ANTHROPIC_API_KEY=dummy docker compose config --quiet

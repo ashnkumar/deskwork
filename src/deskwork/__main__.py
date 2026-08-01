@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -15,7 +16,23 @@ from .prompts import task_prompt
 from .tools.computer import ComputerTool
 from .tools.search import SearchRegulationsTool
 
-CORPUS = Path(__file__).resolve().parents[2] / "corpus"
+
+def corpus_dir() -> Path:
+    """Locate the corpus for both a source checkout and an installed package.
+
+    `parents[2]` alone is wrong once the package is pip-installed: inside the container the
+    module lives in site-packages and that path resolves somewhere in the Python install.
+    The working directory is checked first, which is what makes `deskwork ingest` work in
+    the container, where WORKDIR is /app and the corpus is copied to /app/corpus.
+    """
+    override = os.environ.get("DESKWORK_CORPUS_DIR")
+    if override:
+        return Path(override)
+    local = Path.cwd() / "corpus"
+    if local.is_dir():
+        return local
+    return Path(__file__).resolve().parents[2] / "corpus"
+
 
 # What a correct run must end up having entered. Substring match, case-insensitive, so a
 # reasonable paraphrase still counts but an invented answer does not.
@@ -30,7 +47,11 @@ def cmd_ingest(config: Config) -> int:
     from .ingest import ingest_directory
 
     conn = db.connect(config.database_url)
-    counts = ingest_directory(conn, CORPUS, config.embed_model)
+    directory = corpus_dir()
+    if not directory.is_dir():
+        print(f"No corpus directory at {directory}. Set DESKWORK_CORPUS_DIR.", file=sys.stderr)
+        return 2
+    counts = ingest_directory(conn, directory, config.embed_model)
     for name, count in counts.items():
         print(f"  {count:>4} chunks  {name}")
     print(f"ingested {sum(counts.values())} chunks from {len(counts)} documents")
