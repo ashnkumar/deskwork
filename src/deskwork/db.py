@@ -54,10 +54,17 @@ CREATE TABLE IF NOT EXISTS submissions (
 def connect(database_url: str) -> psycopg.Connection:
     """Open a connection with pgvector's adapters registered.
 
-    register_vector must run per-connection — without it, psycopg sends the embedding as a
-    Python list and Postgres rejects it as the wrong type.
+    Order matters, and getting it wrong only shows up on a *fresh* database. `register_vector`
+    looks the `vector` type up in the catalog and raises "vector type not found in the
+    database" if it is not there yet — so the extension has to be created before registering,
+    not later in init_schema(). Any database that already had the extension hides this, which
+    is exactly how it survives local testing and then fails on someone else's first clone.
+
+    Registration is per-connection: without it psycopg sends the embedding as a plain Python
+    list and Postgres rejects it as the wrong type.
     """
     conn = psycopg.connect(database_url, autocommit=True)
+    conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
     register_vector(conn)
     return conn
 

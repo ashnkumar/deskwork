@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import base64
 import io
+import os
 import shlex
 import subprocess
 import time
@@ -56,13 +57,18 @@ class CommandRunner:
     timeout: float = 20.0
 
     def __call__(self, command: str) -> tuple[int, str, str]:
+        # Inherit the environment and override only DISPLAY. Replacing it wholesale looks
+        # tidier but breaks running outside the container: a hardcoded PATH misses xdotool
+        # installed anywhere unusual, and dropping XAUTHORITY stops both xdotool and scrot
+        # from talking to a real X server at all.
+        env = {**os.environ, "DISPLAY": self.display}
         completed = subprocess.run(
             command,
             shell=True,
             capture_output=True,
             text=True,
             timeout=self.timeout,
-            env={"DISPLAY": self.display, "PATH": "/usr/local/bin:/usr/bin:/bin"},
+            env=env,
             check=False,
         )
         return completed.returncode, completed.stdout, completed.stderr

@@ -161,3 +161,40 @@ def test_corpus_ships_only_expected_documents():
         "cms-hipaa-d0-information-bulletin-2020.pdf",
         "cms-hipaa-statutes-timeline-2021.pdf",
     }
+
+
+@pytest.mark.db
+def test_connect_bootstraps_a_completely_fresh_database(database_url):
+    """A stranger's first run hits a database with no `vector` extension.
+
+    This is a regression test for a real bug: register_vector() looks the type up in the
+    catalog, so creating the extension later in init_schema() was too late and ingestion
+    died with "vector type not found in the database". Every existing test passed, because
+    the test database already had the extension.
+    """
+    import psycopg
+
+    from deskwork import db
+
+    scratch = "deskwork_fresh_boot_test"
+    admin = psycopg.connect(database_url, autocommit=True)
+    try:
+        admin.execute(f'DROP DATABASE IF EXISTS "{scratch}"')
+        admin.execute(f'CREATE DATABASE "{scratch}"')
+    finally:
+        admin.close()
+
+    fresh_url = database_url.rsplit("/", 1)[0] + f"/{scratch}"
+    try:
+        conn = db.connect(fresh_url)  # must not raise
+        db.init_schema(conn)
+        conn.execute("INSERT INTO documents (filename, title, sha256) VALUES ('a','b','c')")
+        row = conn.execute("SELECT count(*) FROM documents").fetchone()
+        assert row is not None and row[0] == 1
+        conn.close()
+    finally:
+        admin = psycopg.connect(database_url, autocommit=True)
+        try:
+            admin.execute(f'DROP DATABASE IF EXISTS "{scratch}"')
+        finally:
+            admin.close()

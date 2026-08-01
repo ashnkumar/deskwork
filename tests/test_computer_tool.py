@@ -321,3 +321,34 @@ def test_typing_reaches_a_real_window(xvfb, tmp_path):
 
     assert marker.exists(), "xterm never wrote the file"
     assert "QI-2025-014" in marker.read_text()
+
+
+def test_command_runner_inherits_the_environment(monkeypatch):
+    """Running outside the container needs XAUTHORITY and the caller's PATH.
+
+    Replacing the environment with a hardcoded PATH is tidy and wrong: xdotool installed
+    somewhere unusual becomes invisible, and without XAUTHORITY neither xdotool nor scrot
+    can talk to a real X server.
+    """
+    from deskwork.tools import computer as computer_module
+
+    captured = {}
+
+    def fake_run(command, **kwargs):
+        captured.update(kwargs)
+
+        class Done:
+            returncode, stdout, stderr = 0, "", ""
+
+        return Done()
+
+    monkeypatch.setattr(computer_module.subprocess, "run", fake_run)
+    monkeypatch.setenv("XAUTHORITY", "/home/someone/.Xauthority")
+    monkeypatch.setenv("PATH", "/opt/weird/bin")
+
+    computer_module.CommandRunner(display=":42")("xdotool getdisplaygeometry")
+
+    env = captured["env"]
+    assert env["DISPLAY"] == ":42", "DISPLAY must be overridden"
+    assert env["XAUTHORITY"] == "/home/someone/.Xauthority", "XAUTHORITY must survive"
+    assert env["PATH"] == "/opt/weird/bin", "the caller's PATH must survive"
