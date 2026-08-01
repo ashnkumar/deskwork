@@ -1,0 +1,24 @@
+# Environment — never commit real credentials. .env.example is the committed template.
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Runtime artifacts
+runs/
+*.png
+!docs/**/*.png
+
+# macOS
+.DS_Store
