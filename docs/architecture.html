@@ -1,0 +1,237 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  :root {
+    --ink: #1c1c1e;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --grey-b: #dcdfe4; --grey-f: #eef0f2;
+    --blue-b: #9cc4d8; --blue-f: #dff0f7; --blue-d: #2d6c8a;
+    --green-b: #a8cdb2; --green-f: #e2f0e6; --green-d: #2f6b43;
+    --purp-b: #c3aede; --purp-f: #eee7f9; --purp-d: #5b3f8c;
+    --amber-b: #e0c48a; --amber-f: #fbf1de; --amber-d: #8a6520;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1560px; height: 812px;
+    font-family: var(--sans); color: var(--ink); background: #fff;
+    padding: 26px 40px 18px; -webkit-font-smoothing: antialiased;
+  }
+  .row { display: grid; grid-template-columns: 104px 1fr; gap: 14px; align-items: center; }
+  .gutter {
+    font-size: 12px; font-weight: 700; line-height: 1.3; text-align: right;
+    color: #8b93a1; letter-spacing: .01em;
+  }
+  .gutter small { display: block; font-weight: 500; font-size: 11px; color: #a7aeb9; margin-top: 2px; }
+  .band { border-radius: 14px; padding: 13px 16px 14px; }
+  .band.grey  { background: var(--grey-f);  border: 1.5px solid var(--grey-b); }
+  .band.blue  { background: var(--blue-f);  border: 1.5px solid var(--blue-b); }
+  .band.green { background: var(--green-f); border: 1.5px solid var(--green-b); }
+  .band.amber { background: var(--amber-f); border: 1.5px solid var(--amber-b); }
+
+  .btitle { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .num {
+    width: 20px; height: 20px; border-radius: 50%; flex: none; background: #fff;
+    display: grid; place-items: center; font-size: 11.5px; font-weight: 700;
+  }
+  .n-g { color: #6a7280; border: 1.5px solid #c3c8d0; }
+  .n-b { color: var(--blue-d); border: 1.5px solid var(--blue-b); }
+  .n-gr{ color: var(--green-d); border: 1.5px solid var(--green-b); }
+  .n-p { color: var(--purp-d); border: 1.5px solid var(--purp-b); }
+  .n-a { color: var(--amber-d); border: 1.5px solid var(--amber-b); }
+  .bt { font-size: 15.5px; font-weight: 700; letter-spacing: -.01em; }
+  .bt small { font-weight: 500; font-size: 12.5px; color: #7b838f; margin-left: 7px; letter-spacing: 0; }
+
+  .card { background: #fff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 10px 13px 11px; }
+  .clabel {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase;
+    color: #9aa2af; margin-bottom: 7px;
+  }
+  .m { font-family: var(--mono); }
+  .pill {
+    display: inline-block; font-family: var(--mono); font-size: 11.5px;
+    background: #f2f4f7; border: 1px solid #e2e6ec; border-radius: 6px;
+    padding: 4px 9px; margin: 0 5px 5px 0; color: #3f4552;
+  }
+  .pill.hot { background: #e9f7ee; border-color: #a8cdb2; color: var(--green-d); font-weight: 700; }
+  .pill.cool { background: #f4eefc; border-color: #d6c6ee; color: var(--purp-d); font-weight: 700; }
+
+  .conn { display: grid; grid-template-columns: 104px 1fr; gap: 14px; }
+  .legs { display: flex; justify-content: space-between; padding: 0 40px; }
+  .leg { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: #6b7280; }
+  .leg .m { font-size: 11.5px; }
+  .glyph { font-size: 17px; line-height: 1; color: #98a0ad; }
+  .h9 { height: 22px; }
+
+  .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .tool { border-radius: 10px; padding: 11px 13px 12px; }
+  .tool.cu { background: #fff; border: 1.5px solid #d6c6ee; }
+  .tool.sr { background: #fff; border: 1.5px solid #a8cdb2; }
+  .tname { font-family: var(--mono); font-size: 13.5px; font-weight: 700; color: #3f4552; }
+  .tsub { font-size: 11.5px; color: #8b93a1; margin-top: 3px; line-height: 1.4; }
+  .tbody { margin-top: 9px; font-size: 12px; color: #4a5160; line-height: 1.5; }
+  .chain {
+    margin-top: 8px; border-radius: 7px; padding: 7px 9px; font-family: var(--mono);
+    font-size: 11px; line-height: 1.45;
+  }
+  .chain.p { background: #f7f3fd; border: 1px solid #ddd0f2; color: var(--purp-d); }
+  .chain.g { background: #eef7f1; border: 1px solid #c6e0cf; color: var(--green-d); }
+
+  .modelbar {
+    display: flex; align-items: center; gap: 10px; background: #fff;
+    border: 1px solid #e3e6ea; border-radius: 10px; padding: 9px 13px; margin-bottom: 11px;
+  }
+  .steps { display: flex; gap: 9px; }
+  .step { flex: 1; background: #fff; border: 1px solid #e3e6ea; border-radius: 9px; padding: 9px 11px; }
+  .snum { font-size: 10px; font-weight: 700; color: #9aa2af; letter-spacing: .09em; }
+  .stitle { font-size: 12.8px; font-weight: 700; margin-top: 3px; }
+  .spath { font-family: var(--mono); font-size: 10.8px; color: #7b838f; margin-top: 4px; }
+
+  .tables { display: flex; gap: 9px; }
+  .tbl { flex: 1; background: #fff; border: 1px solid #e3e6ea; border-radius: 9px; padding: 9px 11px; }
+  .tn { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: #3f4552; }
+  .tc { font-size: 11px; color: #8b93a1; margin-top: 4px; line-height: 1.45; }
+
+  .legend { display: flex; gap: 26px; justify-content: center; margin-top: 13px; font-size: 12px; color: #6b7280; }
+  .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
+</style>
+
+<div class="row">
+  <div class="gutter">You</div>
+  <div class="band grey">
+    <div class="btitle">
+      <span class="num n-g">1</span>
+      <span class="bt">Command line <small>three verbs — no chat UI, no web console</small></span>
+    </div>
+    <span class="pill">deskwork ingest</span>
+    <span class="pill">deskwork run</span>
+    <span class="pill">deskwork verify</span>
+    <span class="pill">--report-id QI-2025-014</span>
+    <span class="pill">--transcript run.json</span>
+  </div>
+</div>
+
+<div class="conn h9"><div></div><div class="legs">
+  <div class="leg"><span class="glyph">▼</span> one task prompt, one system prompt</div>
+  <div class="leg"><span class="glyph">▲</span> <span class="m">stopped: model_finished after 22 steps</span></div>
+</div></div>
+
+<div class="row">
+  <div class="gutter">Agent<small>one container</small></div>
+  <div class="band blue">
+    <div class="btitle">
+      <span class="num n-b">2</span>
+      <span class="bt">The loop <small>~100 lines: send, run the tool, append the result, repeat</small></span>
+    </div>
+
+    <div class="modelbar">
+      <span class="pill cool" style="margin:0">claude-opus-5</span>
+      <span class="pill" style="margin:0">beta computer-use-2025-11-24</span>
+      <span class="pill" style="margin:0">thinking: adaptive</span>
+      <span class="pill" style="margin:0">effort: high</span>
+      <span class="pill" style="margin:0">max 40 steps</span>
+      <span class="pill" style="margin:0">keeps 6 screenshots</span>
+    </div>
+
+    <div class="tools">
+      <div class="tool cu">
+        <div class="tname">3 &nbsp;computer</div>
+        <div class="tsub">Anthropic-defined tool, type <span class="m">computer_20251124</span>. Screenshot, click, type, key, scroll, zoom.</div>
+        <div class="chain p">xdotool &middot; scrot &nbsp;→&nbsp; Xvfb :99 &nbsp;1024×768×24 &nbsp;→&nbsp; firefox-esr --kiosk</div>
+        <div class="tbody">The display is sized at exactly the geometry reported to the API, so screenshots are never rescaled and coordinates map 1:1.</div>
+      </div>
+      <div class="tool sr">
+        <div class="tname">4 &nbsp;search_regulations</div>
+        <div class="tsub">Custom tool. Called <em>during</em> the task, after the question has been read off the screen.</div>
+        <div class="chain g">fastembed bge-small-en-v1.5 &nbsp;→&nbsp; 384-dim query vector &nbsp;→&nbsp; HNSW cosine, top 4</div>
+        <div class="tbody">Returns verbatim passages, each with its source filename and page number — which is what the agent types into the citation field.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="conn h9"><div></div><div class="legs">
+  <div class="leg"><span class="glyph">▼</span> X11 events — the only way it can touch the portal</div>
+  <div class="leg"><span class="glyph">▼</span> <span class="m">SELECT … ORDER BY embedding &lt;=&gt; %s</span></div>
+  <div class="leg"><span class="glyph">▲</span> live desktop on <span class="m">127.0.0.1:6080</span></div>
+</div></div>
+
+<div class="row">
+  <div class="gutter">What it<br>operates</div>
+  <div class="band amber">
+    <div class="btitle">
+      <span class="num n-a">5</span>
+      <span class="bt">QI Portal <small>FastAPI + Jinja, server-rendered, no JavaScript framework &middot; 127.0.0.1:8000</small></span>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="snum">STEP 1 OF 3</div>
+        <div class="stitle">Period &amp; unit</div>
+        <div class="spath">/report/{id}/period</div>
+        <div class="tc" style="margin-top:5px">Report ID must match <span class="m">QI-YYYY-NNN</span> or the server re-renders with an error.</div>
+      </div>
+      <div class="step" style="border-color:#a8cdb2">
+        <div class="snum" style="color:var(--green-d)">STEP 2 OF 3 — WHERE RETRIEVAL HAPPENS</div>
+        <div class="stitle">Attestations</div>
+        <div class="spath">/report/{id}/attestations</div>
+        <div class="tc" style="margin-top:5px">Four regulatory questions. They are only visible <em>here</em> — which is why retrieval cannot happen up front.</div>
+      </div>
+      <div class="step">
+        <div class="snum">STEP 3 OF 3</div>
+        <div class="stitle">Review &amp; submit</div>
+        <div class="spath">/report/{id}/review → /submit</div>
+        <div class="tc" style="margin-top:5px">Writes one <span class="m">submissions</span> row and returns <span class="m">QIR-00001</span>.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="conn h9"><div></div><div class="legs">
+  <div class="leg"><span class="glyph">▼</span> one row per filed report</div>
+  <div class="leg"><span class="glyph">▲</span> the passages the agent quotes</div>
+</div></div>
+
+<div class="row">
+  <div class="gutter">State<small>one container</small></div>
+  <div class="band green">
+    <div class="btitle">
+      <span class="num n-gr">6</span>
+      <span class="bt">Postgres + pgvector <small>the corpus and the filed reports, in one database</small></span>
+    </div>
+    <div class="tables">
+      <div class="tbl">
+        <div class="tn">documents</div>
+        <div class="tc">3 US federal PDFs, deduped by <span class="m">sha256</span></div>
+      </div>
+      <div class="tbl">
+        <div class="tn">chunks</div>
+        <div class="tc">173 rows &middot; <span class="m">VECTOR(384)</span> &middot; HNSW, <span class="m">vector_cosine_ops</span></div>
+      </div>
+      <div class="tbl">
+        <div class="tn">submissions</div>
+        <div class="tc">What the agent actually filed. <span class="m">answers JSONB</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="conn h9"><div></div><div class="legs">
+  <div class="leg"><span class="glyph">▲</span> <span class="m">deskwork verify</span> reads this row — not the agent's own report of what it did</div>
+</div></div>
+
+<div class="row">
+  <div class="gutter">The check</div>
+  <div class="band grey" style="padding:11px 16px 12px">
+    <div class="btitle" style="margin-bottom:0">
+      <span class="num n-g">7</span>
+      <span class="bt">The grader <small>compares the stored answers against ground truth read out of the source PDFs by hand — exit 0 or 1</small></span>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <span><span class="sw" style="background:var(--grey-f);border:1.5px solid var(--grey-b)"></span>You &amp; the verdict</span>
+  <span><span class="sw" style="background:var(--blue-f);border:1.5px solid var(--blue-b)"></span>The agent — both tools</span>
+  <span><span class="sw" style="background:var(--amber-f);border:1.5px solid var(--amber-b)"></span>The software it operates</span>
+  <span><span class="sw" style="background:var(--green-f);border:1.5px solid var(--green-b)"></span>State</span>
+</div>

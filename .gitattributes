@@ -1,0 +1,3 @@
+# Diagram sources are documentation, not project code. Without this the language bar
+# reports the repo as part HTML.
+docs/*.html linguist-documentation

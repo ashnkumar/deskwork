@@ -66,7 +66,11 @@ FIREFOX_PID=$!
 # Wait for a mapped window, not just a live process. Without this the first screenshot can
 # land before the fresh profile is built and the kiosk window painted, and the agent's
 # opening move is to stare at an empty desktop and start guessing.
-wait_for 45 "a Firefox window" xdotool search --onlyvisible --class '(?i)firefox'
+#
+# The pattern is POSIX ERE, which is what xdotool compiles. A PCRE-style '(?i)firefox' does
+# not compile here — xdotool exits 13 and, in this image, segfaults — so the wait could never
+# succeed and the container died 45 seconds into every start.
+wait_for 45 "a Firefox window" xdotool search --onlyvisible --class '[Ff]irefox'
 alive "$FIREFOX_PID" || die "Firefox exited immediately"
 
 echo "desktop ready on $DISPLAY_NUM (${WIDTH}x${HEIGHT}); noVNC on :6080"

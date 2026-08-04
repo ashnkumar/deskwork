@@ -144,6 +144,9 @@ Three things here are worth stealing.
 
 ### 6.1 The system prompt draws a hard line between knowing and looking up
 
+`prompts.py` holds both the system prompt and the task prompt, and is the shortest file in
+the package that changes the outcome.
+
 The agent is told, explicitly, that regulatory facts must come from `search_regulations` and
 may never be recalled from memory, while anything visible on screen must be read from a
 screenshot and never assumed. Without this, the model will happily type a confident,

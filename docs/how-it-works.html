@@ -1,0 +1,164 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  :root {
+    --ink: #1c1c1e;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --red-b:#e6bdb5; --red-f:#fdf1ef; --red-d:#a8483a;
+    --amb-b:#e2c88f; --amb-f:#fdf6e7; --amb-d:#8a6520;
+    --grn-b:#a8cdb2; --grn-f:#eaf5ee; --grn-d:#2f6b43;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1560px; height: 700px;
+    font-family: var(--sans); color: var(--ink); background: #fff;
+    padding: 22px 34px 20px; -webkit-font-smoothing: antialiased;
+  }
+  h1 {
+    font-size: 12.5px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+    color: #8b93a1; text-align: center; margin-bottom: 18px;
+  }
+  .panels { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px; height: 604px; }
+  .panel { border-radius: 15px; padding: 16px 17px 15px; display: flex; flex-direction: column; }
+  .p1 { background: var(--red-f); border: 1.5px solid var(--red-b); }
+  .p2 { background: var(--amb-f); border: 1.5px solid var(--amb-b); }
+  .p3 { background: var(--grn-f); border: 1.5px solid var(--grn-b); }
+
+  .ptitle { display: flex; align-items: center; gap: 9px; margin-bottom: 13px; }
+  .num {
+    width: 23px; height: 23px; border-radius: 50%; flex: none; background: #fff;
+    display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  }
+  .n1 { color: var(--red-d); border: 1.5px solid var(--red-b); }
+  .n2 { color: var(--amb-d); border: 1.5px solid var(--amb-b); }
+  .n3 { color: var(--grn-d); border: 1.5px solid var(--grn-b); }
+  .pt { font-size: 17.5px; font-weight: 700; letter-spacing: -.015em; }
+  .t1 { color: var(--red-d); } .t2 { color: var(--amb-d); } .t3 { color: var(--grn-d); }
+
+  .card { background: #fff; border: 1px solid #e6e9ed; border-radius: 11px; padding: 11px 13px 12px; margin-bottom: 10px; }
+  .clabel {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase;
+    color: #9aa2af; margin-bottom: 8px;
+  }
+  .m { font-family: var(--mono); }
+  .quote { font-size: 12.6px; line-height: 1.55; color: #3f4552; }
+  .quote em { color: #8b93a1; font-style: normal; }
+
+  .step { display: flex; gap: 9px; align-items: flex-start; margin-bottom: 9px; }
+  .sn {
+    flex: none; font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+    background: #f2f4f7; border: 1px solid #e2e6ec; border-radius: 5px;
+    padding: 2px 6px; color: #6b7280; margin-top: 1px;
+  }
+  .sx { font-size: 12.3px; line-height: 1.5; color: #4a5160; }
+
+  .say {
+    background: #fff; border-left: 3px solid var(--amb-b); border-radius: 0 8px 8px 0;
+    padding: 9px 12px; font-size: 12.6px; line-height: 1.5; color: #4a5160; font-style: italic;
+    margin-bottom: 10px;
+  }
+  .call {
+    font-family: var(--mono); font-size: 11.3px; line-height: 1.5; border-radius: 8px;
+    padding: 9px 11px; word-break: break-word;
+  }
+  .call.q { background: #fdf6e7; border: 1.5px solid var(--amb-b); color: var(--amb-d); }
+  .call.r { background: #eaf5ee; border: 1.5px solid var(--grn-b); color: var(--grn-d); }
+
+  .field { background: #fff; border: 1px solid #e6e9ed; border-radius: 9px; padding: 9px 11px; margin-bottom: 8px; }
+  .fl { font-size: 10.5px; font-weight: 700; color: #9aa2af; margin-bottom: 4px; }
+  .fv { font-size: 12.2px; line-height: 1.45; color: #3f4552; }
+  .fv .m { font-size: 11.3px; }
+
+  .verdict {
+    margin-top: auto; background: #fff; border: 1.5px solid var(--grn-b); border-radius: 10px;
+    padding: 10px 12px; text-align: center;
+  }
+  .vbig { font-size: 15px; font-weight: 700; color: var(--grn-d); letter-spacing: -.01em; }
+  .vsub { font-size: 11.6px; color: #6b7280; margin-top: 4px; line-height: 1.45; }
+
+  .foot { margin-top: auto; font-size: 12.2px; line-height: 1.5; color: #6b7280; text-align: center; padding-top: 10px; }
+  .foot b { color: #4a5160; }
+</style>
+
+<h1>How deskwork works</h1>
+
+<div class="panels">
+
+  <div class="panel p1">
+    <div class="ptitle"><span class="num n1">1</span><span class="pt t1">What you hand it</span></div>
+
+    <div class="card">
+      <div class="clabel">The task, in full</div>
+      <div class="quote">File the <b>Q3 2025</b> Quality Improvement report for the <b>Pharmacy</b> department. Use report ID <span class="m">QI-2025-014</span>.<br><br>
+      <em>The attestation questions ask for specific regulatory facts. Look each one up in the corpus before answering, and give the citation the corpus gives you.</em></div>
+    </div>
+
+    <div class="card">
+      <div class="clabel">The corpus</div>
+      <div class="sx" style="margin-bottom:7px">Three US federal publications on HIPAA Administrative Simplification — public domain, shipped with the repo.</div>
+      <div class="quote m" style="font-size:11.2px;color:#6b7280;line-height:1.7">
+        cms-0055-f-ncpdp-d0-final-rule-2020.pdf<br>
+        cms-hipaa-d0-information-bulletin-2020.pdf<br>
+        cms-hipaa-statutes-timeline-2021.pdf
+      </div>
+      <div class="sx" style="margin-top:8px"><b>173 chunks</b>, embedded locally. No embeddings API.</div>
+    </div>
+
+    <div class="foot">
+      That is everything. <b>It has never seen the form</b>, and the questions it will be asked are nowhere in this prompt.
+    </div>
+  </div>
+
+  <div class="panel p2">
+    <div class="ptitle"><span class="num n2">2</span><span class="pt t2">The question becomes the query</span></div>
+
+    <div class="card" style="padding-bottom:9px">
+      <div class="clabel">Steps 1–9 · working the form</div>
+      <div class="step"><span class="sn">1</span><span class="sx">Screenshot. Read the page.</span></div>
+      <div class="step"><span class="sn">2–8</span><span class="sx">Click through step 1, type the quarter, department and report ID.</span></div>
+      <div class="step" style="margin-bottom:0"><span class="sn">9</span><span class="sx">Continue — and the attestation questions appear for the first time.</span></div>
+    </div>
+
+    <div class="card" style="border-color:var(--amb-b)">
+      <div class="clabel" style="color:var(--amb-d)">On screen at step 9</div>
+      <div class="quote">Under final rule CMS-0055-F, which NCPDP Telecommunication Standard field must be used to identify partial fills for Schedule II drugs? Give the field name and number.</div>
+    </div>
+
+    <div class="say">“Four regulatory questions. Let me look each up in the corpus rather than relying on memory.”</div>
+
+    <div class="call q">step 10 &nbsp;→&nbsp; search_regulations(<br>&nbsp;&nbsp;"Under final rule CMS-0055-F, which NCPDP<br>&nbsp;&nbsp;&nbsp;Telecommunication Standard field must be used…")</div>
+
+    <div class="foot">
+      The query <b>is</b> the question, read off the screen one step earlier. It could not have been written before step 9 — which is why retrieval is a tool here, not context loaded up front.
+    </div>
+  </div>
+
+  <div class="panel p3">
+    <div class="ptitle"><span class="num n3">3</span><span class="pt t3">It types what it found</span></div>
+
+    <div class="call r" style="margin-bottom:10px">returns verbatim, with provenance →<br>
+      “…requiring covered entities to use the <b>Quantity<br>&nbsp;Prescribed (460-ET)</b> field for retail pharmacy<br>&nbsp;transactions for Schedule II drugs.”<br>
+      <span style="color:#6b7280">cms-0055-f-ncpdp-d0-final-rule-2020.pdf · p. 1</span></div>
+
+    <div class="field">
+      <div class="fl">Typed into the form · steps 12–19</div>
+      <div class="fv">The Quantity Prescribed (460-ET) field. Covered entities must use this field for retail pharmacy transactions for Schedule II drugs to identify partial fills.</div>
+    </div>
+    <div class="field">
+      <div class="fl">Citation field</div>
+      <div class="fv m">cms-0055-f-ncpdp-d0-final-rule-2020.pdf, p. 1<br>(SUMMARY and DATES sections)</div>
+    </div>
+
+    <div class="card" style="border-color:#e0d3b8;background:#fffdf7">
+      <div class="clabel" style="color:var(--amb-d)">What is not enforced</div>
+      <div class="sx">The system prompt forbids answering a regulatory question from memory. The model obeying it is cooperation, not a guarantee — nothing in the loop can stop it inventing a rule number.<br><br><b>Fabrication is not prevented here. It is caught below.</b></div>
+    </div>
+
+    <div class="verdict">
+      <div class="vbig">Submitted · QIR-00001</div>
+      <div class="vsub"><span class="m">deskwork verify</span> reads that row back and grades all four answers against the source PDFs.<br><b style="color:var(--grn-d)">PASS</b> — and the agent's own account of what it did counts for nothing.</div>
+    </div>
+  </div>
+
+</div>
