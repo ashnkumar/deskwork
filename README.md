@@ -1,6 +1,6 @@
 # deskwork
 
-An agent that reads the rulebook, then fills in the form.
+Claude's computer use needs a search tool, not a bigger prompt.
 
 [![ci](https://github.com/ashnkumar/deskwork/actions/workflows/ci.yml/badge.svg)](https://github.com/ashnkumar/deskwork/actions/workflows/ci.yml)
 [![python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/downloads/)
@@ -8,11 +8,32 @@ An agent that reads the rulebook, then fills in the form.
 
 ![An agent filing a quarterly compliance report in a browser: it reads four regulatory questions off the form, searches a corpus of federal PDFs, types each retrieved answer with its citation, and submits.](docs/demo.gif)
 
-A real run, sped up. The agent has never seen this form. It clicks through to the
-attestations, finds four questions it cannot answer from the task prompt, searches the corpus,
-and types back what it found — including the filename and page number it came from. Eleven
-runs out of eleven filed a correct report; the sample is small and the caveat is in
-[Limitations](#limitations).
+A real run, sped up. Three screens into a form it has never seen, the agent hits four
+regulatory questions. It searches a corpus of federal PDFs, types back what it found with the
+filename and page number, and submits.
+
+## The pattern
+
+Computer use lets Claude operate software nobody gave it an API to. That moves where its
+information needs come from. The agent finds out what it has to know by *using* the software
+— several steps in, off a screen you did not write and could not have predicted.
+
+Retrieval that runs before the loop cannot help with that. The usual shape — take the
+question, embed it, fetch the top passages, paste them into the prompt, one completion —
+assumes you are holding the question when the run starts. Here the question is behind a
+Continue button.
+
+So retrieval goes in the `tools` array next to `computer`, and the model reaches for it when
+the screen gives it a reason to. Both tools are in the same request. There is no router.
+
+The other half of why this matters is what computer use *does*. A chat model that invents a
+regulation number says a wrong thing to a person who can push back. A computer-use agent
+types it into a system of record, correctly formatted, where it stays until an audit. Taking
+the human out from in front of the write is what raises the stakes on grounding.
+
+deskwork is one worked example: an agent that files a quarterly healthcare compliance report
+by looking up the regulations the form asks about. The domain is incidental —
+[Applying this elsewhere](#applying-this-elsewhere) is the part to take.
 
 ## Quickstart
 
@@ -24,47 +45,69 @@ docker compose up -d --build  # ~2 min, plus however long the base images take t
 
 docker compose exec agent deskwork ingest   # 173 chunks from 3 PDFs, a few seconds
 docker compose exec agent deskwork run      # ~2 minutes
-docker compose exec agent deskwork verify   # did it actually file a correct report?
+docker compose exec agent deskwork verify   # did it file a correct report?
 ```
 
-One Anthropic API key is the only credential. No AWS account, no hosted vector database, no
-second key for embeddings — those run locally on CPU, and the model is baked into the image
-so the first run does not download anything.
+An Anthropic API key is the only credential. Chunks are embedded on CPU with
+`BAAI/bge-small-en-v1.5` and stored in Postgres with pgvector — a normal vector index, just a
+local one, so there is no second key and no hosted service to sign up for. The embedding
+model is baked into the image, so the first run downloads nothing.
 
 While `run` is going, open **<http://localhost:6080/vnc.html>** to watch it work. The portal
 is on <http://localhost:8000> if you want to fill the form in yourself and see what the agent
 is up against.
 
-## What you get
+## What comes out
 
 A task prompt goes in. A row in the `submissions` table comes out, holding four regulatory
-facts the agent looked up rather than recalled, each carrying the document and page it came
-from.
+facts the agent looked up rather than recalled, each with the document and page it came from.
 
-| | Retrieval on its own | Computer use on its own | deskwork |
+| | Retrieval on its own | Computer use on its own | Both, as tools |
 |---|---|---|---|
-| **The answer** | Correct, and sitting in a chat window | Typed confidently into the right field, and sometimes invented | Retrieved, then typed into the right field |
+| **The answer** | Correct, and sitting in a chat window | Typed into the right field, and sometimes invented | Retrieved, then typed into the right field |
 | **Getting it into the system of record** | You do it | It does it | It does it |
 | **Provenance** | You can cite it if you scroll up | None — the model cannot tell you where a remembered fact came from | Filename and page, in the form, because that is what the tool returned |
 | **Knowing it worked** | You read it | The agent says it worked | `deskwork verify` reads the row back and grades it |
 
-The pattern is not about healthcare. It applies wherever the authoritative source is a
-document corpus and the system of record is software with no usable API. Healthcare
-compliance is the example because the source documents are genuinely public.
-
-## How it works
+## The trace
 
 ![Three panels. One: the task prompt and a three-PDF corpus, with the note that the agent has never seen the form. Two: at step 9 the attestation questions appear on screen, and at step 10 the agent passes that question verbatim to search_regulations. Three: the retrieved passage, the text typed into the form with its citation, and the grader's verdict.](docs/how-it-works.png)
 
-The agent has exactly two tools. `computer` takes screenshots and drives mouse and keyboard.
+The agent has two tools. `computer` takes screenshots and drives mouse and keyboard.
 `search_regulations` embeds a question and returns the nearest passages with their filename
 and page number.
 
 A run is 22 or 23 steps and about two minutes: screenshot, click through step 1, type the
-quarter and report ID, reach the attestations, search the corpus twice, type four answers,
-submit, read the reference number off the confirmation page.
+quarter and report ID, reach the attestations, search the corpus, type four answers, submit,
+read the reference number off the confirmation page.
 
-### Architecture
+**The questions are on page two of the form.** The agent reaches them at step 9, and at step
+10 it says:
+
+> Four regulatory questions. Let me look each up in the corpus rather than relying on memory.
+
+then passes that question — the one it read off the screen a step earlier — to
+`search_regulations` almost verbatim. There is no earlier point at which that query could
+have been written. Anything that retrieved before the run would have been guessing what a
+form it had never seen was about to ask.
+
+Two things in that trace are the model's, not ours. The **query text**, which it lifted off a
+screen we could not predict. And the **number of searches**: four questions, two calls.
+Nothing told it to batch them.
+
+**What is ours is the policy.** `prompts.py` instructs it to search — *"You may well believe
+you already know the answer. Search anyway"* — and the task prompt repeats it. So this is not
+a model spontaneously inventing retrieval. It is a model given a rule about where facts may
+come from, in a situation where only it can supply the query.
+
+**The demo questions were written from the corpus, so every one of them is answerable.** Open
+[`src/portal/app.py`](src/portal/app.py) and you will find the four attestations hard-coded,
+one asking outright for a document and page number — exactly what the retrieval tool returns.
+That fixes what is findable. It does nothing about *when* the agent finds out what it is being
+asked, and nothing about whether it looks. Claude almost certainly has CMS-0055-F somewhere in
+training; it could have typed an answer at step 10 and been right. It searched instead.
+
+## Architecture
 
 ![Seven numbered layers: the command line, the agent container holding the loop and its two tools, the FastAPI portal with its three form steps, Postgres with pgvector holding documents, chunks and submissions, and the grader reading the submissions row.](docs/architecture.png)
 
@@ -78,66 +121,47 @@ submit, read the reference number off the confirmation page.
 | **6** | Store | `db.py`, `ingest.py` | Postgres + pgvector. HNSW over 384-dim vectors |
 | **7** | The grader | `verify` in `__main__.py` | Reads the `submissions` row and grades it against the PDFs |
 
-The display is sized at exactly the geometry reported to the API, so screenshots are never
-rescaled and coordinates map 1:1. The implementation this replaces carried a
-`scale_coordinates()` helper converting between a Retina Mac and a 1024×768 target in both
-directions, which is a permanent source of off-by-a-scale-factor bugs. A screenshot whose
-dimensions disagree with the declared geometry is a hard error here.
+The request is `client.beta.messages.create` with `betas=["computer-use-2025-11-24"]`, model
+`claude-opus-5`, adaptive thinking, and both tools in one array.
 
-**The API ships a feature that does the screenshot pruning for you**, and it is the right
-answer for production: context editing (`clear_tool_uses_20250919`, behind the
-`context-management-2025-06-27` beta) clears old tool results server-side, as one request
-parameter, with no code of yours involved. If you are building an agent loop rather than
-reading one, use it.
+The API also ships a feature that does the screenshot pruning for you: context editing
+(`clear_tool_uses_20250919`, behind the `context-management-2025-06-27` beta) clears old tool
+results server-side, as one request parameter. If you are building a loop rather than reading
+one, use it. This repo keeps ~30 lines of its own so the pruning is visible, and because the
+screenshot becomes a short text note *inside* the tool result rather than the result
+disappearing.
 
-This repo keeps ~30 lines of its own for two reasons. It edits *inside* the tool result —
-the screenshot becomes a short text note and the result block stays — so the transcript
-still shows that a screenshot was taken at that step and what came back, which is the thing
-the model reasons about later. And it avoids stacking a second beta on top of computer use
-in a repo whose job is to be legible end to end. Neither reason would survive contact with
-a real deployment.
+## Applying this elsewhere
 
-Start with `src/deskwork/prompts.py`. It is the shortest file that matters.
+Four pieces transfer.
 
-## Retrieval is a tool, not context
+**Two tools in one request.** `computer` is Anthropic's, declared by type.
+`search_regulations` is an ordinary custom tool — a JSON schema and a Python function. They go
+in the same array and the model arbitrates. `agent.py` is the whole loop and there is no
+routing logic in it.
 
-Almost every retrieval system loads its context up front: search, prepend, then let the model
-work. When you know the question in advance that is the right design — simpler, and one round
-trip instead of two.
-
-It cannot work here, and the trace shows why. **The questions are on page two of the form.**
-The agent reaches them at step 9, and at step 10 it says:
-
-> Four regulatory questions. Let me look each up in the corpus rather than relying on memory.
-
-then passes that question — the one it read off the screen a step earlier — to
-`search_regulations` almost verbatim. There is no earlier point at which that query could
-have been written. A system that retrieved before the run would have been guessing what a
-form it had never seen was about to ask.
-
-**The questions were written from the corpus, so every one of them is answerable.** Open
-[`src/portal/app.py`](src/portal/app.py) and you will find the four attestations hard-coded,
-one of them asking outright for a document and page number — which is exactly what the
-retrieval tool returns. That is a demo shaped to have an answer, and it is worth being
-plain about it.
-
-What the shaping does *not* arrange is the part the argument rests on. It fixes what is
-findable; it does nothing about **when** the agent finds out what it is being asked, and
-nothing about whether it bothers to look. The model almost certainly has CMS-0055-F
-somewhere in training — it could have typed an answer at step 10 and been right. It
-searched instead, twice, and the run that did so is the one in the GIF.
-
-Two rules in the system prompt hold this together. **Never state a regulatory fact from
-memory**, and **never assume what is on screen**. Drop the first and the model types a
-plausible rule identifier out of training data; the output is correctly formatted, wrong, and
-indistinguishable from a right answer until someone gets audited. Drop the second and it
-types into a field on a page that moved two steps ago.
+**A system prompt that separates knowing from looking up.** `prompts.py` is the shortest file
+in the repo that changes the outcome. Two rules carry it: **Never state a regulatory fact
+from memory**, and **never assume what is on screen**. Drop the first and the model types a
+plausible rule identifier out of training data — correctly formatted, wrong, and
+indistinguishable from a right answer until someone gets audited. Drop the second and it types
+into a field on a page that moved two steps ago. Both transfer to any corpus.
 
 **Neither rule is enforced.** They are instructions, and the model following them is
 cooperation rather than a guarantee — nothing in the loop inspects a typed string to check it
-came from a retrieved passage. That is why `deskwork verify` exists, and why it reads the
-database instead of the agent's account of its own work. Fabrication is not prevented here.
-It is caught afterwards, by something that had no hand in producing the answer.
+came from a retrieved passage. So the third piece is **a check that does not ask the agent**:
+`deskwork verify` reads the row that was written and grades it against the source documents.
+Fabrication is not prevented here. It is caught afterwards, by something that had no hand in
+producing the answer.
+
+**Display geometry that matches what you declare.** The X display is sized to exactly the
+resolution reported to the API, so coordinates map 1:1 and a screenshot whose dimensions
+disagree is a hard error. A helper that rescales between a Retina display and the target is a
+permanent source of off-by-a-scale-factor bugs; not having one is cheaper than getting it right.
+
+To point this at something else: replace the PDFs in `corpus/` and re-run `ingest`, change the
+target from the bundled portal to your own software, and rewrite the task prompt. The grader
+is the piece with no generic version — it is written against this form's four questions.
 
 `SPEC.md` has the data model, the chunking measurements, and what was rejected on the way.
 
@@ -150,10 +174,9 @@ It is caught afterwards, by something that had no hand in producing the answer.
 | `deskwork run --transcript run.json` | The same, plus every message and tool call written out |
 | `deskwork verify --report-id QI-2025-014` | Grade one filed report. Exit 0 or 1 |
 
-Every setting is an environment variable and `.env.example` lists them with defaults. The ones
-worth changing are `DESKWORK_MODEL` (`claude-opus-5`), `DESKWORK_EFFORT` (`high`),
-`DESKWORK_MAX_STEPS` (`40`) and `DESKWORK_MAX_IMAGES` (`6` — screenshots dominate the token
-bill).
+Every setting is an environment variable; `.env.example` lists them with defaults. Worth
+changing: `DESKWORK_MODEL` (`claude-opus-5`), `DESKWORK_EFFORT` (`high`), `DESKWORK_MAX_STEPS`
+(`40`) and `DESKWORK_MAX_IMAGES` (`6` — screenshots dominate the token bill).
 
 ## Tests
 
@@ -163,17 +186,15 @@ uv run pytest -m live   # the tier that spends money
 ```
 
 - The **computer tool** is asserted against a recording runner — the exact `xdotool`
-  invocations — and then driven against a real Xvfb, typing into a real `xterm` and reading
-  the text back.
+  invocations — then driven against a real Xvfb, typing into an `xterm` and reading it back.
 - The **loop** runs against a fake client replaying recorded turns, which is where the subtle
   bugs live: a dropped `tool_result`, an assistant turn not echoed back verbatim, a pruned
   thinking block, a run that never terminates.
-- **Retrieval quality is a test.** `test_corpus_eval` asserts that every fact the demo depends
-  on is retrievable, and `test_chunk_size_is_tuned` pins the chunk size, because 1100
-  characters answered three of five questions and 500 answers five.
+- **Retrieval quality is a test.** `test_corpus_eval` asserts every fact the demo depends on is
+  retrievable, and `test_chunk_size_is_tuned` pins the chunk size, because 1100 characters
+  answered three of five questions and 500 answers five.
 
-Tests that need a display skip without one, so the number above is what gets collected rather
-than what passes on your machine.
+Tests needing a display skip without one, so that count is what gets collected, not what passes.
 
 ## Limitations
 
@@ -183,14 +204,9 @@ than what passes on your machine.
   form, one machine.
 - **A failed run leaves a partial report behind.** There is no cleanup and no resume. The next
   run starts a new draft rather than finishing the abandoned one.
-- **Nothing stops a fabricated answer being typed.** The grader catches it afterwards.
-  Anything unattended would need that check in front of the write, not behind it.
-- **The portal ships with this repo, and so do its questions.** It has server-side
-  validation, format rules, and errors that appear only on screen, so the agent cannot get
-  through it without reading the page. But we wrote it, and we wrote the four attestations
-  *from* the corpus — so every question is guaranteed to have an answer in it. A real
-  compliance form would ask things the corpus does not cover, and the honest failure mode
-  there is a confident wrong answer, which this demo never has to face.
+- **The portal ships with this repo, and so do its questions** — see [The trace](#the-trace).
+  A real form would ask things the corpus does not cover, and the honest failure mode there is
+  a confident wrong answer.
 - **The corpus is three documents**, enough to make retrieval meaningful and a wrong answer
   detectable, not enough to say anything about retrieval at scale. It is also trusted input:
   passages reach the model as authoritative, so pointing this at a corpus you do not control
