@@ -71,7 +71,7 @@ submit, read the reference number off the confirmation page.
 | # | Component | Module | What it does |
 |---|---|---|---|
 | **1** | Command line | `__main__.py` | `ingest`, `run`, `verify`. Nothing else |
-| **2** | The loop | `agent.py` | Send, run the tool, append the result, repeat. Prunes old screenshots so a long run does not exhaust the context |
+| **2** | The loop | `agent.py` | Send, run the tool, append the result, repeat. Swaps old screenshots for a text note so a long run does not exhaust the context |
 | **3** | Computer tool | `tools/computer.py` | `computer_20251124` against Xvfb via `xdotool` and `scrot` |
 | **4** | Retrieval tool | `tools/search.py` | One embedding call, one SQL query, passages with provenance |
 | **5** | The portal | `portal/app.py` | Three-step form with server-side validation. The target |
@@ -83,6 +83,19 @@ rescaled and coordinates map 1:1. The implementation this replaces carried a
 `scale_coordinates()` helper converting between a Retina Mac and a 1024×768 target in both
 directions, which is a permanent source of off-by-a-scale-factor bugs. A screenshot whose
 dimensions disagree with the declared geometry is a hard error here.
+
+**The API ships a feature that does the screenshot pruning for you**, and it is the right
+answer for production: context editing (`clear_tool_uses_20250919`, behind the
+`context-management-2025-06-27` beta) clears old tool results server-side, as one request
+parameter, with no code of yours involved. If you are building an agent loop rather than
+reading one, use it.
+
+This repo keeps ~30 lines of its own for two reasons. It edits *inside* the tool result —
+the screenshot becomes a short text note and the result block stays — so the transcript
+still shows that a screenshot was taken at that step and what came back, which is the thing
+the model reasons about later. And it avoids stacking a second beta on top of computer use
+in a repo whose job is to be legible end to end. Neither reason would survive contact with
+a real deployment.
 
 Start with `src/deskwork/prompts.py`. It is the shortest file that matters.
 
@@ -101,6 +114,18 @@ then passes that question — the one it read off the screen a step earlier — 
 `search_regulations` almost verbatim. There is no earlier point at which that query could
 have been written. A system that retrieved before the run would have been guessing what a
 form it had never seen was about to ask.
+
+**The questions were written from the corpus, so every one of them is answerable.** Open
+[`src/portal/app.py`](src/portal/app.py) and you will find the four attestations hard-coded,
+one of them asking outright for a document and page number — which is exactly what the
+retrieval tool returns. That is a demo shaped to have an answer, and it is worth being
+plain about it.
+
+What the shaping does *not* arrange is the part the argument rests on. It fixes what is
+findable; it does nothing about **when** the agent finds out what it is being asked, and
+nothing about whether it bothers to look. The model almost certainly has CMS-0055-F
+somewhere in training — it could have typed an answer at step 10 and been right. It
+searched instead, twice, and the run that did so is the one in the GIF.
 
 Two rules in the system prompt hold this together. **Never state a regulatory fact from
 memory**, and **never assume what is on screen**. Drop the first and the model types a
@@ -160,9 +185,12 @@ than what passes on your machine.
   run starts a new draft rather than finishing the abandoned one.
 - **Nothing stops a fabricated answer being typed.** The grader catches it afterwards.
   Anything unattended would need that check in front of the write, not behind it.
-- **The portal ships with this repo.** It has server-side validation, format rules, and errors
-  that appear only on screen, so the agent cannot get through it without reading the page —
-  but we wrote it, and a target you control is easier than one you do not.
+- **The portal ships with this repo, and so do its questions.** It has server-side
+  validation, format rules, and errors that appear only on screen, so the agent cannot get
+  through it without reading the page. But we wrote it, and we wrote the four attestations
+  *from* the corpus — so every question is guaranteed to have an answer in it. A real
+  compliance form would ask things the corpus does not cover, and the honest failure mode
+  there is a confident wrong answer, which this demo never has to face.
 - **The corpus is three documents**, enough to make retrieval meaningful and a wrong answer
   detectable, not enough to say anything about retrieval at scale. It is also trusted input:
   passages reach the model as authoritative, so pointing this at a corpus you do not control
