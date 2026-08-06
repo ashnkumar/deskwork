@@ -1,6 +1,6 @@
 # deskwork
 
-Claude's computer use needs a search tool, not a bigger prompt.
+Grounded computer use — Claude looks it up, then types it.
 
 [![ci](https://github.com/ashnkumar/deskwork/actions/workflows/ci.yml/badge.svg)](https://github.com/ashnkumar/deskwork/actions/workflows/ci.yml)
 [![python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/downloads/)
