@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     UNIQUE (document_id, ordinal)
 );
 
--- Cosine distance, matching the normalised embeddings bge produces.
+-- Cosine distance, matching the normalized embeddings bge produces.
 CREATE INDEX IF NOT EXISTS chunks_embedding_idx
     ON chunks USING hnsw (embedding vector_cosine_ops);
 

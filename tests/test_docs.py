@@ -39,7 +39,7 @@ CONTENT_IMAGES = re.findall(r"(?<!\[)!\[([^\]]*)\]\(([^)]+)\)", README)
 
 
 def _prose(text: str) -> str:
-    """Markdown emphasis and line wrapping are not meaning. Normalise both away."""
+    """Markdown emphasis and line wrapping are not meaning. Normalize both away."""
     return re.sub(r"\s+", " ", text.replace("**", "").replace("*", "")).lower()
 
 

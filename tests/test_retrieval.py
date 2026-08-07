@@ -48,12 +48,12 @@ TOP_K = 4
 # --------------------------------------------------------------------------- pure functions
 
 
-def test_normalise_rejoins_hyphenated_line_breaks():
-    assert "administrative" in ingest.normalise("adminis-\ntrative simplification")
+def test_normalize_rejoins_hyphenated_line_breaks():
+    assert "administrative" in ingest.normalize("adminis-\ntrative simplification")
 
 
-def test_normalise_keeps_paragraph_breaks():
-    assert "\n\n" in ingest.normalise("First para.\n\n\n\nSecond para.")
+def test_normalize_keeps_paragraph_breaks():
+    assert "\n\n" in ingest.normalize("First para.\n\n\n\nSecond para.")
 
 
 def test_split_page_covers_the_whole_input():

@@ -19,7 +19,7 @@ Together you get something that can find the right regulation *and* put it where
 to go. That combination is the entire point of this repository. Everything else is
 scaffolding chosen to keep that pattern legible.
 
-The pattern generalises past healthcare — it applies to any domain where the authoritative
+The pattern generalizes past healthcare — it applies to any domain where the authoritative
 source of truth is a document corpus and the system of record is software with no usable
 API. Healthcare compliance is the example because the corpus is genuinely public.
 
@@ -153,7 +153,11 @@ screenshot and never assumed. Without this, the model will happily type a confid
 well-formatted, entirely invented rule identifier — which is precisely the failure mode that
 makes ungrounded computer use useless for compliance work.
 
-This is the load-bearing prompt in the repo, and it is the thing the demo actually proves.
+This is the load-bearing prompt in the repo, and nothing enforces it. The loop cannot tell a
+retrieved string from a recalled one once it has become keystrokes, and the demo's four
+questions are answerable from training, so a correct report is not on its own evidence that
+the rule was followed. Closing that gap is what `verify` is for: it grades the filed row
+against the source PDFs without consulting the agent.
 
 ### 6.2 The virtual display is sized at the model's coordinate space
 

@@ -42,7 +42,7 @@ class Chunk:
     text: str
 
 
-def normalise(raw: str) -> str:
+def normalize(raw: str) -> str:
     """Undo PDF line-wrapping artefacts without destroying paragraph structure."""
     text = _HYPHEN_BREAK.sub(r"\1\2", raw)
     text = _SOFT_WRAP.sub(" ", text)
@@ -88,7 +88,7 @@ def chunk_pdf(path: Path, size: int = CHUNK_CHARS, overlap: int = CHUNK_OVERLAP)
     chunks: list[Chunk] = []
     ordinal = 0
     for page_index, page in enumerate(reader.pages, start=1):
-        text = normalise(page.extract_text() or "")
+        text = normalize(page.extract_text() or "")
         for piece in split_page(text, size=size, overlap=overlap):
             chunks.append(Chunk(ordinal=ordinal, page=page_index, text=piece))
             ordinal += 1
