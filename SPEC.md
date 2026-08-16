@@ -156,8 +156,16 @@ makes ungrounded computer use useless for compliance work.
 This is the load-bearing prompt in the repo, and nothing enforces it. The loop cannot tell a
 retrieved string from a recalled one once it has become keystrokes, and the demo's four
 questions are answerable from training, so a correct report is not on its own evidence that
-the rule was followed. Closing that gap is what `verify` is for: it grades the filed row
-against the source PDFs without consulting the agent.
+the rule was followed. Narrowing that gap is what `verify` is for. `grading.py` reads the
+filed row and checks it against the corpus the agent retrieved from: the citation has to
+name a document that is actually in the corpus, at a page that exists, and the extracted
+text of that page has to contain the value the answer gives. The agent is never consulted.
+
+Narrowing, not closing. A citation leading to a page that carries the right value is not
+proof the agent read it there, and the check has no idea what a sentence means — it is
+matching values and provenance, not comprehension. What it does rule out is the failure that
+actually matters here: an answer attributed to a document or page that does not support it,
+which is what an invented answer looks like from the outside.
 
 ### 6.2 The virtual display is sized at the model's coordinate space
 
@@ -210,7 +218,11 @@ The reference also shipped an educational module from the Federation of State Me
 Boards. That one is third-party copyright rather than a government work, so it was replaced
 rather than inherited.
 
-`corpus/SOURCES.md` records the origin URL and retrieval date for every document.
+`corpus/SOURCES.md` records what each document is, where it came from and when it was
+retrieved. One of the three carries a direct origin URL; the other two are identified by
+issuing agency, title and date, which is noted there as a gap in the record. The claim that
+none of them contains personal identifiers is enforced by `tests/test_corpus_hygiene.py`
+rather than asserted in prose.
 
 ## 9. Deliberate non-goals
 

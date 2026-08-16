@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import db
+from . import db, grading
 from .agent import Step
 from .agent import run as run_agent
 from .config import Config
@@ -34,13 +34,15 @@ def corpus_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "corpus"
 
 
-# What a correct run must end up having entered. Substring match, case-insensitive, so a
-# reasonable paraphrase still counts but an invented answer does not.
-EXPECTED = {
-    "ncpdp_field": "460",
-    "effective_date": "march 24, 2020",
-    "compliance_date": "september 21, 2020",
-}
+# The corpus as the grader reads it: one row per page, chunks reassembled in order. This is
+# the same extracted text the agent retrieved from, which is what lets `verify` check a
+# citation against the document instead of taking the agent's word for it.
+_CORPUS_PAGES = """
+SELECT d.filename, c.page, string_agg(c.text, ' ' ORDER BY c.ordinal)
+FROM chunks c
+JOIN documents d ON d.id = c.document_id
+GROUP BY d.filename, c.page
+"""
 
 
 def cmd_ingest(config: Config) -> int:
@@ -101,13 +103,38 @@ def cmd_run(config: Config, args) -> int:
     print(f"\n{result.final_text}")
 
     if args.transcript:
+        # A run receipt, not just a narrative. Anything quoted about this run later — how
+        # many steps, how long, how many tokens, what it cost — has to be readable out of
+        # this file, or it is a recollection.
         Path(args.transcript).write_text(
             json.dumps(
-                [
-                    {"index": s.index, "text": s.text, "tools": [n for n, _ in s.tool_calls]}
-                    for s in result.steps
-                ],
+                {
+                    "model": result.model,
+                    "effort": result.effort,
+                    "task": {
+                        "quarter": args.quarter,
+                        "department": args.department,
+                        "report_id": args.report_id,
+                    },
+                    "stopped_because": result.stopped_because,
+                    "steps": len(result.steps),
+                    "seconds": result.seconds,
+                    "tool_calls": result.tool_call_counts,
+                    "usage_totals": result.usage_totals,
+                    "turns": [
+                        {
+                            "index": s.index,
+                            "seconds": s.seconds,
+                            "stop_reason": s.stop_reason,
+                            "usage": s.usage,
+                            "text": s.text,
+                            "tools": [{"name": n, "input": p} for n, p in s.tool_calls],
+                        }
+                        for s in result.steps
+                    ],
+                },
                 indent=2,
+                default=str,
             )
         )
         print(f"\ntranscript written to {args.transcript}")
@@ -130,6 +157,10 @@ def cmd_verify(config: Config, args) -> int:
     Scoped to the report ID that was asked for. Grading whichever row is newest would
     report PASS off a leftover submission from an earlier run, which is precisely the kind
     of false green a grader exists to prevent.
+
+    The grading itself lives in `grading.py`, against the corpus rather than against a list
+    of strings: the citation has to name a document that exists at a page that exists, and
+    that page has to actually contain the value the answer gives.
     """
     conn = db.connect(config.database_url)
     row = conn.execute(
@@ -141,6 +172,13 @@ def cmd_verify(config: Config, args) -> int:
         print(f"FAIL — no submission was filed for report ID {args.report_id}.")
         return 1
 
+    corpus = {
+        (filename, page): text for filename, page, text in conn.execute(_CORPUS_PAGES).fetchall()
+    }
+    if not corpus:
+        print("Corpus is empty, so a citation cannot be checked. Run `deskwork ingest` first.")
+        return 2
+
     submission_id, quarter, department, report_id, answers = row
     print(f"submission QIR-{submission_id:05d}: {quarter} / {department} / {report_id}")
 
@@ -148,18 +186,11 @@ def cmd_verify(config: Config, args) -> int:
     if (quarter, department) != (args.quarter, args.department):
         ok = False
         print(f"  [XX] expected {args.quarter} / {args.department}")
-    for key, expected in EXPECTED.items():
-        actual = str(answers.get(key, ""))
-        hit = expected in actual.lower()
-        ok = ok and hit
-        print(f"  [{'ok' if hit else 'XX'}] {key}: {actual[:70]!r}")
-        if not hit:
-            print(f"        expected to contain {expected!r}")
 
-    citation = str(answers.get("citation", ""))
-    cited = ".pdf" in citation.lower()
-    print(f"  [{'ok' if cited else 'XX'}] citation: {citation[:70]!r}")
-    ok = ok and cited
+    report = grading.grade(answers, corpus)
+    for check in report.checks:
+        print(f"  [{'ok' if check.ok else 'XX'}] {check.key}: {check.detail}")
+    ok = ok and report.ok
 
     print("PASS — report filed correctly." if ok else "FAIL — report filed with wrong answers.")
     return 0 if ok else 1

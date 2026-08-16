@@ -38,7 +38,7 @@ Computer use lets an agent operate software nobody gave it an API to. That moves
 information needs come from: it finds out what it has to know by *using* the software, several
 steps in, off a screen you did not write and could not have predicted.
 
-Retrieval that runs before the loop cannot help. Embedding the question and pasting the top
+Retrieval that runs before the loop cannot target that. Embedding the question and pasting the top
 passages into the prompt assumes you hold the question when the run starts; here it is behind a
 Continue button. So retrieval goes in the `tools` array next to `computer`, and the model reaches
 for it when the screen gives it a reason to. There is no router.
@@ -99,7 +99,7 @@ CMS-0055-F in training and could have answered from memory. It searched.
 | **4** | Retrieval tool | `tools/search.py` | One embedding call, one SQL query, passages with provenance |
 | **5** | The portal | `portal/app.py` | Three-step form with server-side validation. The target |
 | **6** | Store | `db.py`, `ingest.py` | Postgres + pgvector. HNSW over 384-dim vectors |
-| **7** | The grader | `verify` in `__main__.py` | Reads the `submissions` row and grades it against the PDFs |
+| **7** | The grader | `grading.py`, `verify` in `__main__.py` | Reads the `submissions` row and checks each answer, and the page it cites, against the ingested corpus |
 
 The request is `client.beta.messages.create` with `betas=["computer-use-2025-11-24"]`, model
 `claude-opus-5`, adaptive thinking, and both tools in one array.
@@ -125,8 +125,10 @@ typing into a page that moved two steps ago.
 
 **Neither rule is enforced.** Nothing in the loop inspects a typed string to check it came from a
 retrieved passage. So the third piece is **a check that does not ask the agent**: `deskwork
-verify` reads the filed row and grades it against the source documents.
-Fabrication is not prevented here, only caught afterward.
+verify` reads the filed row and grades it against the corpus. The citation has to name a document
+that is actually in there, at a page that exists, and that page has to contain the value the
+answer gives. Fabrication is not prevented here, only caught — and only the kind that cites a
+page it could not have come from. Nothing here understands what a sentence means.
 
 **Display geometry that matches what you declare.** The X display is sized to exactly the
 resolution reported to the API, so coordinates map 1:1 and a screenshot whose dimensions disagree
@@ -147,21 +149,30 @@ measurements, and what was rejected on the way.
 | `deskwork run --transcript run.json` | The same, plus every message and tool call written out |
 | `deskwork verify --report-id QI-2025-014` | Grade one filed report. Exit 0 or 1 |
 
-Every setting is an environment variable, listed with defaults in `.env.example`. Worth changing:
+Every tunable is an environment variable, listed with defaults in `.env.example` — the service
+addresses are fixed by `docker-compose.yml`, since they name containers on its own network.
+Worth changing:
 `DESKWORK_MODEL` (`claude-opus-5`), `DESKWORK_EFFORT` (`high`), `DESKWORK_MAX_STEPS` (`40`) and
 `DESKWORK_MAX_IMAGES` (`6` — screenshots dominate the token bill).
 
 ## Tests
 
 ```bash
-uv run pytest           # 141 tests, no API key, no network
-uv run pytest -m live   # the tier that spends money
+uv run pytest           # 167 tests, no API key, no network
+uv run pytest -m live   # 3 more that call the real API and spend money
 ```
 
 - The **computer tool** is asserted against a recording runner — the exact `xdotool`
   invocations — then driven against a real Xvfb, typing into an `xterm` and reading it back.
 - The **loop** runs against a fake client replaying recorded turns, where the subtle bugs live: a
   dropped `tool_result`, an unfaithful assistant echo, a pruned thinking block.
+- **The grader has its own tests**, and they are all reports that should fail: a negated answer,
+  an invented filename, a page number that does not exist, a real page that does not support the
+  answer. A grading bug is the one kind that shows up as `PASS`.
+- **The live tier is the only thing that can catch the vendor changing the contract.** The fake
+  client will happily replay a request shape the API has stopped accepting, so three tests send
+  the real one — including a check that the model config this repo *excludes* is still excluded
+  for the reason given.
 - **Retrieval quality is a test.** `test_chunk_size_is_tuned` pins the chunk size, because 1100
   characters answered three of five questions and 500 answers five.
 
@@ -169,9 +180,11 @@ Tests needing a display skip without one, so that count is what gets collected, 
 
 ## Limitations
 
-- **Eleven out of eleven is a small sample.** Every graded run so far filed a correct report in
-  22 or 23 steps, but eleven trials cannot distinguish a reliable agent from a lucky one — the
-  true rate could be as low as **76%** and this measurement would not know.
+- **Eleven out of eleven is a small sample.** Every graded run filed a correct report — the
+  ledger is in [`docs/runs.md`](docs/runs.md), one row per run, regradable from the database
+  with the shipped grader. But eleven trials cannot distinguish a reliable agent from a lucky
+  one, and they are not independent in the way the arithmetic assumes: same corpus, same
+  prompt, same afternoon. The true rate could be as low as **76%** and this would not know.
 - **The portal ships with this repo, and so do its questions** — see [The trace](#the-trace). A
   real form would ask things the corpus does not cover, and the failure mode there is a confident
   wrong answer.

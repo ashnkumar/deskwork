@@ -35,12 +35,19 @@ class Tool(Protocol):
 
 @dataclass
 class Step:
-    """One turn, recorded for the transcript."""
+    """One turn, recorded for the transcript.
+
+    `usage` and `seconds` are here so a run leaves behind something you can quote. A claim
+    about how long a run takes or what it costs is worth exactly as much as the record
+    backing it, and reconstructing either after the fact is guesswork.
+    """
 
     index: int
     text: str
     tool_calls: list[tuple[str, dict]] = field(default_factory=list)
     stop_reason: str | None = None
+    usage: dict = field(default_factory=dict)
+    seconds: float = 0.0
 
 
 @dataclass
@@ -48,6 +55,23 @@ class RunResult:
     steps: list[Step]
     messages: list[dict]
     stopped_because: str
+    model: str = ""
+    effort: str = ""
+    seconds: float = 0.0
+
+    @property
+    def usage_totals(self) -> dict[str, int]:
+        """Token usage summed over the run, by whatever fields the API reported.
+
+        Read off the response rather than hardcoded, so a new usage field starts showing up
+        in transcripts without anyone editing this.
+        """
+        totals: dict[str, int] = {}
+        for step in self.steps:
+            for name, value in step.usage.items():
+                if isinstance(value, int):
+                    totals[name] = totals.get(name, 0) + value
+        return totals
 
     @property
     def final_text(self) -> str:
@@ -144,25 +168,34 @@ def run(
     messages: list[dict] = [{"role": "user", "content": task}]
     steps: list[Step] = []
     stopped_because = "max_steps"
+    run_started = time.monotonic()
 
     for index in range(1, config.max_steps + 1):
         prune_images(messages, config.max_images)
 
+        turn_started = time.monotonic()
         response = client.beta.messages.create(
             model=config.model,
             max_tokens=MAX_TOKENS,
             betas=[BETA_FLAG],
             system=system_prompt(config.display_width, config.display_height),
             tools=[tool.to_params() for tool in by_name.values()],
-            # Adaptive thinking is the only supported mode on current models; effort is
-            # what actually controls depth and spend.
+            # Adaptive thinking on every model this ships against; effort, not budget_tokens,
+            # is what controls depth and spend. Not universal — 4.5-era models are
+            # extended-thinking-only and 400 on this exact value. See .env.example.
             thinking={"type": "adaptive"},
             output_config={"effort": config.effort},
             messages=messages,
         )
 
         blocks = _as_blocks(response)
-        step = Step(index=index, text=_text_of(blocks), stop_reason=_stop_reason(response))
+        step = Step(
+            index=index,
+            text=_text_of(blocks),
+            stop_reason=_stop_reason(response),
+            usage=_usage_of(response),
+            seconds=round(time.monotonic() - turn_started, 3),
+        )
 
         # Echo the assistant turn back verbatim. Thinking blocks must round-trip unchanged.
         messages.append({"role": "assistant", "content": blocks})
@@ -222,7 +255,14 @@ def run(
         if on_step:
             on_step(step)
 
-    return RunResult(steps=steps, messages=messages, stopped_because=stopped_because)
+    return RunResult(
+        steps=steps,
+        messages=messages,
+        stopped_because=stopped_because,
+        model=config.model,
+        effort=config.effort,
+        seconds=round(time.monotonic() - run_started, 3),
+    )
 
 
 # The SDK returns objects; tests replay plain dicts. These readers accept both so the loop
@@ -243,6 +283,24 @@ def _as_blocks(response: Any) -> list[Any]:
 def _stop_reason(response: Any) -> str | None:
     reason = _get(response, "stop_reason")
     return str(reason) if reason is not None else None
+
+
+def _usage_of(response: Any) -> dict:
+    """Token counts as the API reported them, or `{}` from a fake client that omits them.
+
+    Copied field-for-field rather than picked apart, so cache and image token fields land in
+    the transcript without this needing to know their names.
+    """
+    usage = _get(response, "usage")
+    if usage is None:
+        return {}
+    if isinstance(usage, dict):
+        raw = usage
+    elif hasattr(usage, "model_dump"):
+        raw = usage.model_dump()
+    else:
+        raw = {k: v for k, v in vars(usage).items() if not k.startswith("_")}
+    return {k: v for k, v in raw.items() if isinstance(v, int)}
 
 
 def _text_of(blocks: Iterable[Any]) -> str:

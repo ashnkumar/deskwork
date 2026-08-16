@@ -19,8 +19,10 @@ from . import embeddings
 from .db import init_schema
 
 # Chosen by measurement, not taste — see tests/test_retrieval.py::test_chunk_size_is_tuned.
-# On the corpus eval, 1100-char chunks answer 3/5 questions at k=3 and 500-char chunks
-# answer 5/5. A dense regulatory page packs several unrelated facts into 1100 characters
+# On the corpus eval, 1100-char chunks answer 3/5 questions and 500-char chunks answer 5/5.
+# The gap does not depend on how many passages are returned: it is 3/5 against 5/5 at both
+# k=3 and k=4, and the two the larger chunks miss are both dates. Which is the mechanism —
+# a dense regulatory page packs several unrelated facts into 1100 characters
 # (the CMS-0055-F page 1 window holds the effective date, the compliance date, four staff
 # phone numbers and the start of the background section), and averaging all of that into one
 # vector buries the date a query is actually asking about.

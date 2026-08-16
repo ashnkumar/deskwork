@@ -1,12 +1,20 @@
 # Corpus sources
 
 Three US federal government publications on HIPAA Administrative Simplification. All are
-works of the US Government and therefore in the public domain. Every file was verified by
-full text extraction before inclusion: no SSN, EIN, date-of-birth, MRN, or patient-name
-patterns appear in any of them, and they contain no patient-identifiable information of any
-kind. These are regulatory and policy documents, not clinical records.
+works of the US Government and therefore in the public domain. These are regulatory and
+policy documents, not clinical records.
 
-Retrieved 2026-07-31.
+No SSN, EIN, date-of-birth, MRN, or patient-name pattern appears in any of them. That is not
+a claim you have to take on trust: it is `tests/test_corpus_hygiene.py`, which extracts the
+full text of every shipped PDF and runs the patterns, and which fails if you drop in a
+replacement corpus that does carry identifiers. It is a hygiene check on public documents,
+not a privacy guarantee — it matches patterns, and cannot recognise an identifier that does
+not look like one.
+
+Retrieved 2026-07-31. The origin URL below is the one recorded at retrieval time; the two
+CMS documents were saved from cms.gov without the exact deep link being kept, which is a
+gap in the record rather than a doubt about the documents — both are identified by title and
+date, and both are reachable from the CMS Administrative Simplification pages.
 
 | File | Document | Source |
 |---|---|---|

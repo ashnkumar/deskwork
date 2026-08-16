@@ -135,9 +135,14 @@ def test_readme_states_the_real_test_count() -> None:
         text=True,
         cwd=_ROOT,
     )
-    collected = re.search(r"(\d+) tests? collected", proc.stdout)
+    # Two shapes: "164 tests collected" with nothing deselected, and "164/167 tests
+    # collected (3 deselected)" once the live tier exists. The README quotes the number that
+    # runs without a key, which is the selected count — the left-hand one. Matching the bare
+    # trailing number silently compared against the total instead.
+    collected = re.search(r"(?:(\d+)/)?(\d+) tests? collected", proc.stdout)
     assert collected, proc.stdout[-500:]
-    assert int(stated.group(1)) == int(collected.group(1))
+    selected = int(collected.group(1) or collected.group(2))
+    assert int(stated.group(1)) == selected
 
 
 def test_how_it_works_diagram_matches_the_shipped_corpus() -> None:

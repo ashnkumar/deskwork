@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pypdf import PdfReader
 
 from deskwork import ingest, retrieval
 from tests.conftest import CORPUS_DIR, EMBED_MODEL
@@ -60,9 +61,12 @@ def test_split_page_covers_the_whole_input():
     text = ". ".join(f"sentence number {i}" for i in range(200))
     pieces = ingest.split_page(text, size=300, overlap=50)
     assert len(pieces) > 1
-    # Every non-overlapping character must survive somewhere.
-    assert "sentence number 0" in pieces[0]
-    assert "sentence number 199" in pieces[-1]
+    # Every sentence, not just the first and the last. Asserting the ends would pass with
+    # the entire middle of the page dropped, which is the bug this is here to catch. Each
+    # sentence is shorter than the overlap, so one straddling a window boundary is still
+    # whole inside the following window.
+    missing = [i for i in range(200) if not any(f"sentence number {i}" in p for p in pieces)]
+    assert not missing, f"split_page dropped {len(missing)} sentences, starting at {missing[:5]}"
 
 
 def test_split_page_windows_respect_size():
@@ -81,10 +85,25 @@ def test_split_page_of_empty_text_is_empty():
 
 
 def test_chunking_never_spans_a_page():
-    """Page numbers are cited into a compliance form, so they have to be exact."""
+    """Page numbers are cited into a compliance form, so they have to be exact.
+
+    Ordinals and non-decreasing page labels are not enough on their own: text merged from
+    two pages and labelled with the earlier one satisfies both, and produces a citation that
+    sends an auditor to a page which does not contain the sentence.
+    """
     pdf = next(CORPUS_DIR.glob("*.pdf"))
     chunks = ingest.chunk_pdf(pdf)
     assert chunks
+
+    page_text = {
+        number: ingest.normalize(page.extract_text() or "")
+        for number, page in enumerate(PdfReader(str(pdf)).pages, start=1)
+    }
+    for chunk in chunks:
+        assert chunk.text in page_text[chunk.page], (
+            f"chunk {chunk.ordinal} is labelled page {chunk.page}, but its text is not on that page"
+        )
+
     # Ordinals are dense and ascending; page numbers never decrease.
     assert [c.ordinal for c in chunks] == list(range(len(chunks)))
     pages = [c.page for c in chunks]
@@ -155,7 +174,11 @@ def test_chunk_size_is_tuned(conn):
 
     tuned = score(ingest.CHUNK_CHARS, ingest.CHUNK_OVERLAP)
     assert tuned == len(CORPUS_EVAL), f"configured chunk size answers only {tuned}/5"
-    assert tuned > score(1100, 150), "chunk size no longer beats the 1100-char baseline"
+    # The exact baseline, not merely "worse". README, SPEC and ingest.py all quote three of
+    # five, so three of five is what this asserts — otherwise the number in the prose is a
+    # recollection and this test only says the arrow points the right way.
+    baseline = score(1100, 150)
+    assert baseline == 3, f"the 1100-char baseline now answers {baseline}/5, not the 3/5 documented"
 
     # Leave the corpus at the configured size for any later test in the session.
     ingest.ingest_directory(conn, CORPUS_DIR, EMBED_MODEL)

@@ -4,7 +4,7 @@ Anthropic has no embeddings endpoint, and the deliverable is that a stranger run
 exactly one API key — so a hosted embedding provider is out. The model runs in-process,
 which also means the whole retrieval path is deterministic and testable with no network.
 
-bge-small-en-v1.5 is asymmetric. Its model card prescribes a short instruction prefix on
+bge-small-en-v1.5 is asymmetric. Its model card recommends a short instruction prefix on
 *queries* but not on the passages being indexed, for short-query-to-long-passage retrieval —
 which is exactly what this is.
 

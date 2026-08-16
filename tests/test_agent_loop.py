@@ -379,3 +379,43 @@ def test_every_tool_use_has_a_matching_tool_result():
             if block.get("type") == "tool_result":
                 answered.add(block["tool_use_id"])
     assert sent == answered == {"a", "b"}
+
+
+# --------------------------------------------------------------------- the run receipt
+
+
+def test_usage_is_recorded_per_step_and_totalled():
+    """A claim about what a run cost is worth exactly as much as the record behind it.
+
+    Fields are copied as the API reports them rather than named here, so cache and image
+    token counts reach the transcript without this code being taught about them first.
+    """
+    turn = {
+        **tool_turn("computer", {"action": "screenshot"}),
+        "usage": {"input_tokens": 100, "output_tokens": 20, "cache_read_input_tokens": 7},
+    }
+    last = {**text_turn("done"), "usage": {"input_tokens": 300, "output_tokens": 40}}
+    result = run(FakeClient([turn, last]), config(), [FakeTool("computer")], "task")
+
+    assert [s.usage["input_tokens"] for s in result.steps] == [100, 300]
+    assert result.usage_totals == {
+        "input_tokens": 400,
+        "output_tokens": 60,
+        "cache_read_input_tokens": 7,
+    }
+
+
+def test_a_response_without_usage_does_not_break_the_run():
+    """Any response missing `usage` must still produce a clean run rather than an AttributeError."""
+    result = run(FakeClient([text_turn("done")]), config(), [FakeTool("computer")], "task")
+    assert result.steps[0].usage == {}
+    assert result.usage_totals == {}
+
+
+def test_the_run_records_the_model_and_effort_it_used():
+    """A transcript that does not say which model produced it cannot be quoted later."""
+    result = run(FakeClient([text_turn("done")]), config(), [FakeTool("computer")], "task")
+    assert result.model == config().model
+    assert result.effort == config().effort
+    assert result.seconds >= 0.0
+    assert result.steps[0].seconds >= 0.0
