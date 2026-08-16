@@ -201,7 +201,7 @@
     <div class="tables">
       <div class="tbl">
         <div class="tn">documents</div>
-        <div class="tc">3 US federal PDFs, deduped by <span class="m">sha256</span></div>
+        <div class="tc">3 US federal PDFs, unique by <span class="m">filename</span></div>
       </div>
       <div class="tbl">
         <div class="tn">chunks</div>
@@ -224,7 +224,7 @@
   <div class="band grey" style="padding:11px 16px 12px">
     <div class="btitle" style="margin-bottom:0">
       <span class="num n-g">7</span>
-      <span class="bt">The grader <small>compares the stored answers against ground truth read out of the source PDFs by hand — exit 0 or 1</small></span>
+      <span class="bt">The grader <small>checks each answer against hand-read ground truth, and the page it cites against the corpus — exit 0 or 1</small></span>
     </div>
   </div>
 </div>
