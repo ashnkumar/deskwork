@@ -34,8 +34,8 @@ While `run` is going, open **<http://localhost:6080/vnc.html>** to watch, or
 
 ## The pattern
 
-With computer use, it finds out what it has to know by *using* the software, several
-steps in, on a screen you wouldn't know existed prior to firing off the agent.
+With computer use, the agent finds out what it has to know by *using* the software, several
+steps in, on a screen you wouldn't know existed when you fired it off.
 
 Retrieval that runs _before_ the loop can't target that. Embedding the question and pasting the top
 passages into the prompt assumes you know the question when the run starts; in our demo case it's behind a
@@ -57,7 +57,6 @@ up rather than recalled, and the document and page they came from.
 | **Into the system of record** | You do it | It does it | It does it |
 | **Provenance** | You can cite it if you scroll up | None — the model can't tell you where a remembered fact came from | Filename and page, in the form, because that's what the tool returned |
 | **Knowing it worked** | You read it | The agent says it worked | `deskwork verify` reads the row back and grades it |
-
 
 ## The trace
 
@@ -106,13 +105,13 @@ pruning is visible in the code, but if you're building rather than reading, use 
 
 ## Applying this elsewhere
 
-4 pieces transfer.
+Four pieces transfer.
 
 **Two tools in one request.** `computer` is Anthropic's, declared by type. `search_regulations`
 is an ordinary custom tool — a JSON schema and a Python function. Same array, and the model
 arbitrates; `agent.py` has no routing logic in it.
 
-**A system prompt that separates knowing from looking up.** 2 rules carry `prompts.py`:
+**A system prompt that separates knowing from looking up.** Two rules carry `prompts.py`:
 **Never state a regulatory fact from memory**, and **never assume what is on screen**. The first
 stops the model typing a plausible rule identifier out of training data; the second stops it
 typing into a page that moved 2 steps ago.
