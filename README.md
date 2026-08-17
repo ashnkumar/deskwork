@@ -8,7 +8,7 @@ Supercharge Claude's computer use with retrieval.
 
 ![An agent filing a quarterly compliance report in a browser: it reads four regulatory questions off the form, searches a corpus of federal PDFs, types each retrieved answer with its citation, and submits.](docs/demo.gif)
 
-A real run, sped up. Three screens into a form it has never seen, the agent hits four regulatory
+A real run, sped up. 3 screens into a form it has never seen, the agent hits 4 regulatory
 questions, searches a corpus of federal PDFs, and types back what it found with the filename and
 page number.
 
@@ -49,8 +49,8 @@ where it stays until an audit.
 
 ## What comes out
 
-A task prompt goes in. A row in `submissions` comes out: four regulatory facts the agent looked
-up rather than recalled, each with the document and page it came from.
+A task prompt goes in. A row in `submissions` comes out: 3 regulatory facts the agent looked
+up rather than recalled, and the document and page they came from.
 
 | | Retrieval on its own | Computer use on its own | Both, as tools |
 |---|---|---|---|
@@ -59,7 +59,7 @@ up rather than recalled, each with the document and page it came from.
 | **Provenance** | You can cite it if you scroll up | None — the model cannot tell you where a remembered fact came from | Filename and page, in the form, because that is what the tool returned |
 | **Knowing it worked** | You read it | The agent says it worked | `deskwork verify` reads the row back and grades it |
 
-This corpus is small enough to paste whole — all three PDFs extract to 58,000 characters. What
+This corpus is small enough to paste whole — all 3 PDFs extract to 58,000 characters. What
 that would not give you is the page number, and the page number is what gets typed into the form.
 
 ## The trace
@@ -69,7 +69,7 @@ that would not give you is the page number, and the page number is what gets typ
 `computer` drives the mouse and keyboard; `search_regulations` returns passages with their
 filename and page number. Both go out in the same request.
 
-A run is 22 or 23 steps and about two minutes. **The questions are on page two of the form.**
+A run is 22 or 23 steps and about 2 minutes. **The questions are on page 2 of the form.**
 The agent reaches them at step 9, and at step 10 it says:
 
 > Four regulatory questions. Let me look each up in the corpus rather than relying on memory.
@@ -77,8 +77,8 @@ The agent reaches them at step 9, and at step 10 it says:
 then passes that question to `search_regulations` almost verbatim. There is no earlier point at
 which that query could have been written.
 
-Two things there are the model's: the **query text**, lifted off a screen we could not predict,
-and the **number of searches** — four questions, two calls, unbatched. **The policy is ours.**
+2 things there are the model's: the **query text**, lifted off a screen we could not predict,
+and the **number of searches** — 4 questions, 2 calls, unbatched. **The policy is ours.**
 `prompts.py` tells it to search — *"You may well believe you already know the answer. Search
 anyway"* — so this is a model given a rule about where facts may come from, in a situation where
 only it can supply the query.
@@ -96,8 +96,8 @@ CMS-0055-F in training and could have answered from memory. It searched.
 | **1** | Command line | `__main__.py` | `ingest`, `run`, `verify` |
 | **2** | The loop | `agent.py` | Send, run the tool, append the result, repeat. Swaps old screenshots for a text note so a long run does not exhaust the context |
 | **3** | Computer tool | `tools/computer.py` | `computer_20251124` against Xvfb via `xdotool` and `scrot` |
-| **4** | Retrieval tool | `tools/search.py` | One embedding call, one SQL query, passages with provenance |
-| **5** | The portal | `portal/app.py` | Three-step form with server-side validation. The target |
+| **4** | Retrieval tool | `tools/search.py` | 1 embedding call, 1 SQL query, passages with provenance |
+| **5** | The portal | `portal/app.py` | 3-step form with server-side validation. The target |
 | **6** | Store | `db.py`, `ingest.py` | Postgres + pgvector. HNSW over 384-dim vectors |
 | **7** | The grader | `grading.py`, `verify` in `__main__.py` | Reads the `submissions` row and checks each answer, and the page it cites, against the ingested corpus |
 
@@ -112,16 +112,16 @@ pruning is visible in the code, but if you are building rather than reading, use
 
 ## Applying this elsewhere
 
-Four pieces transfer.
+4 pieces transfer.
 
-**Two tools in one request.** `computer` is Anthropic's, declared by type. `search_regulations`
+**2 tools in 1 request.** `computer` is Anthropic's, declared by type. `search_regulations`
 is an ordinary custom tool — a JSON schema and a Python function. Same array, and the model
 arbitrates; `agent.py` has no routing logic in it.
 
-**A system prompt that separates knowing from looking up.** Two rules carry `prompts.py`:
+**A system prompt that separates knowing from looking up.** 2 rules carry `prompts.py`:
 **Never state a regulatory fact from memory**, and **never assume what is on screen**. The first
 stops the model typing a plausible rule identifier out of training data; the second stops it
-typing into a page that moved two steps ago.
+typing into a page that moved 2 steps ago.
 
 **Neither rule is enforced.** Nothing in the loop inspects a typed string to check it came from a
 retrieved passage. So the third piece is **a check that does not ask the agent**: `deskwork
@@ -137,7 +137,7 @@ off-by-a-scale-factor bugs.
 
 To point this somewhere else: replace the PDFs in `corpus/`, re-run `ingest`, aim the agent at
 your own software, and rewrite the task prompt. Only the grader has no generic version — it is
-written against this form's four questions. `SPEC.md` has the data model, the chunking
+written against this form's 4 questions. `SPEC.md` has the data model, the chunking
 measurements, and what was rejected on the way.
 
 ## Commands
@@ -145,9 +145,9 @@ measurements, and what was rejected on the way.
 | Command | What it does |
 |---|---|
 | `deskwork ingest` | Chunk and embed the corpus. Re-running replaces a document cleanly |
-| `deskwork run` | One task, start to finish. `--report-id`, `--quarter`, `--department` |
+| `deskwork run` | 1 task, start to finish. `--report-id`, `--quarter`, `--department` |
 | `deskwork run --transcript run.json` | The same, plus every message and tool call written out |
-| `deskwork verify --report-id QI-2025-014` | Grade one filed report. Exit 0 or 1 |
+| `deskwork verify --report-id QI-2025-014` | Grade 1 filed report. Exit 0 or 1 |
 
 Every tunable is an environment variable, listed with defaults in `.env.example` — the service
 addresses are fixed by `docker-compose.yml`, since they name containers on its own network.
@@ -170,25 +170,25 @@ uv run pytest -m live   # 3 more that call the real API and spend money
   an invented filename, a page number that does not exist, a real page that does not support the
   answer. A grading bug is the one kind that shows up as `PASS`.
 - **The live tier is the only thing that can catch the vendor changing the contract.** The fake
-  client will happily replay a request shape the API has stopped accepting, so three tests send
+  client will happily replay a request shape the API has stopped accepting, so 3 tests send
   the real one — including a check that the model config this repo *excludes* is still excluded
   for the reason given.
 - **Retrieval quality is a test.** `test_chunk_size_is_tuned` pins the chunk size, because 1100
-  characters answered three of five questions and 500 answers five.
+  characters answered 3 of 5 questions and 500 answers 5.
 
 Tests needing a display skip without one, so that count is what gets collected, not what passes.
 
 ## Limitations
 
-- **Eleven out of eleven is a small sample.** Every graded run filed a correct report — the
-  ledger is in [`docs/runs.md`](docs/runs.md), one row per run, regradable from the database
-  with the shipped grader. But eleven trials cannot distinguish a reliable agent from a lucky
+- **11 out of 11 is a small sample.** Every graded run filed a correct report — the
+  ledger is in [`docs/runs.md`](docs/runs.md), 1 row per run, regradable from the database
+  with the shipped grader. But 11 trials cannot distinguish a reliable agent from a lucky
   one, and they are not independent in the way the arithmetic assumes: same corpus, same
   prompt, same afternoon. The true rate could be as low as **76%** and this would not know.
 - **The portal ships with this repo, and so do its questions** — see [The trace](#the-trace). A
   real form would ask things the corpus does not cover, and the failure mode there is a confident
   wrong answer.
-- **The corpus is three documents** — enough to make retrieval meaningful, not enough to say
+- **The corpus is 3 documents** — enough to make retrieval meaningful, not enough to say
   anything about retrieval at scale. It is also trusted input, so pointing this at a corpus you
   do not control is an undefended prompt-injection boundary.
 
@@ -199,7 +199,7 @@ medical or legal advice.
 
 ## Corpus
 
-Three US federal publications on HIPAA Administrative Simplification — public domain, checked for
+3 US federal publications on HIPAA Administrative Simplification — public domain, checked for
 patient-identifiable content. Provenance and retrieval dates are in
 [`corpus/SOURCES.md`](corpus/SOURCES.md).
 
