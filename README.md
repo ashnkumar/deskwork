@@ -12,6 +12,8 @@ A real run, sped up. 3 screens into a form it has never seen, the agent hits 4 r
 questions, searches a corpus of federal PDFs, and types back what it found with the filename and
 page number.
 
+*See the **[technical post](https://voxellabs.ai/projects/deskwork)** for more details.*
+
 ## Quickstart
 
 ```bash
